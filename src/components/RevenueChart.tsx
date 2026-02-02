@@ -1,0 +1,316 @@
+import { useState, useEffect } from 'react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  LabelList,
+  ReferenceLine,
+} from 'recharts';
+import { formatDate } from '../utils/dataParser';
+import type { DailyDataPoint } from '../hooks/useFilters';
+import styles from './RevenueChart.module.css';
+
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false
+  );
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [breakpoint]);
+
+  return isMobile;
+}
+
+interface RevenueChartProps {
+  data: DailyDataPoint[];
+  companies?: string[];
+  title?: string;
+  dailyGoal?: number;
+  comparisonData?: DailyDataPoint[] | null;
+  comparisonLabel?: string | null;
+}
+
+// Colors for company lines
+const COMPANY_COLORS = [
+  '#6366f1', // indigo
+  '#f59e0b', // amber
+  '#10b981', // emerald
+  '#ef4444', // red
+  '#8b5cf6', // violet
+  '#06b6d4', // cyan
+  '#f97316', // orange
+  '#84cc16', // lime
+  '#ec4899', // pink
+  '#14b8a6', // teal
+];
+
+function formatCompact(value: number): string {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `${(value / 1000).toFixed(0)}k`;
+  return value.toString();
+}
+
+function formatBRL(value: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+export function RevenueChart({ data, companies = [], title = 'Faturamento Diário', dailyGoal, comparisonData, comparisonLabel }: RevenueChartProps) {
+  const isMobile = useIsMobile();
+
+  const chartData = data.map((d, index) => {
+    const point: Record<string, string | number | null> = {
+      date: formatDate(d.date),
+      total: d.total,
+      // Align comparison by index (day 0 current = day 0 comparison)
+      comparisonTotal: comparisonData && comparisonData[index] ? comparisonData[index].total : null,
+    };
+
+    // Add company values
+    companies.forEach((company) => {
+      point[company] = (d[company] as number) || 0;
+    });
+
+    return point;
+  });
+
+  const hasComparison = comparisonData && comparisonData.length > 0;
+
+  const showMultipleLines = companies.length > 1;
+
+  // Calculate Y-axis domain
+  const maxDataValue = data.length > 0 ? Math.max(...data.map((d) => d.total)) : 0;
+  const minDataValue = data.length > 0 ? Math.min(...data.map((d) => d.total)) : 0;
+
+  // Always expand Y-axis to include dailyGoal if it exists
+  const shouldExpandForGoal = dailyGoal && dailyGoal > 0 && dailyGoal > maxDataValue;
+
+  // Calculate Y domain - don't start at 0 if data range is small relative to values
+  const yAxisMin = minDataValue > 0 && minDataValue > maxDataValue * 0.3
+    ? Math.floor(minDataValue * 0.9 / 1000) * 1000
+    : 0;
+  const yAxisMax = shouldExpandForGoal ? dailyGoal * 1.1 : undefined;
+
+  const chartHeight = isMobile ? 220 : 280;
+
+  if (data.length === 0) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.header}>
+          <span className={styles.title}>{title}</span>
+        </div>
+        <div className={styles.empty}>Nenhum dado para exibir</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.container}>
+      <div className={styles.header}>
+        <span className={styles.title}>{title}</span>
+      </div>
+      <div className={styles.chart}>
+        <ResponsiveContainer width="100%" height={chartHeight}>
+          <LineChart data={chartData} margin={{ top: 8, right: 48, left: 0, bottom: 0 }}>
+            <XAxis
+              dataKey="date"
+              axisLine={false}
+              tickLine={false}
+              tick={{ fontSize: isMobile ? 10 : 11, fill: 'var(--ink-faint)' }}
+              tickMargin={8}
+              interval="preserveStartEnd"
+              scale="point"
+              padding={{ left: 20, right: 20 }}
+            />
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              tick={{ fontSize: 11, fill: 'var(--ink-faint)' }}
+              tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+              tickMargin={8}
+              width={48}
+              domain={[yAxisMin, yAxisMax || 'auto']}
+            />
+            <Tooltip
+              content={({ active, payload, label }) => {
+                if (active && payload && payload.length) {
+                  const currentTotal = payload.find((p) => p.dataKey === 'total')?.value as number | undefined;
+                  const compTotal = payload.find((p) => p.dataKey === 'comparisonTotal')?.value as number | undefined;
+                  const delta = currentTotal && compTotal ? ((currentTotal - compTotal) / compTotal) * 100 : null;
+
+                  return (
+                    <div className={styles.tooltip}>
+                      <span className={styles.tooltipDate}>{label}</span>
+                      <div className={styles.tooltipItems}>
+                        {payload
+                          .filter((entry) => entry.dataKey !== 'comparisonTotal')
+                          .map((entry, index) => (
+                          <div key={index} className={styles.tooltipItem}>
+                            <span
+                              className={styles.tooltipDot}
+                              style={{ background: entry.color }}
+                            />
+                            <span className={styles.tooltipLabel}>
+                              {entry.name === 'total' ? 'Total' : entry.name}
+                            </span>
+                            <span className={styles.tooltipValue}>
+                              {formatBRL(entry.value as number)}
+                            </span>
+                          </div>
+                        ))}
+                        {compTotal != null && (
+                          <div className={styles.tooltipItem}>
+                            <span
+                              className={styles.tooltipDot}
+                              style={{ background: 'var(--ink-faint)' }}
+                            />
+                            <span className={styles.tooltipLabel}>
+                              {comparisonLabel || 'Anterior'}
+                            </span>
+                            <span className={styles.tooltipValue}>
+                              {formatBRL(compTotal)}
+                            </span>
+                          </div>
+                        )}
+                        {delta !== null && (
+                          <div className={styles.tooltipDelta} style={{ color: delta >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                            {delta >= 0 ? '+' : ''}{delta.toFixed(1)}%
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
+            {showMultipleLines && (
+              <Legend
+                verticalAlign="top"
+                height={36}
+                formatter={(value) => (
+                  <span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
+                    {value === 'total' ? 'Total' : value}
+                  </span>
+                )}
+              />
+            )}
+
+            {/* Daily goal reference line */}
+            {dailyGoal && dailyGoal > 0 && (
+              <ReferenceLine
+                y={dailyGoal}
+                stroke="#23D8D3"
+                strokeDasharray="4 4"
+                strokeWidth={1.5}
+                label={{
+                  value: formatCompact(dailyGoal),
+                  position: 'right',
+                  fill: '#23D8D3',
+                  fontSize: 11,
+                  fontWeight: 500,
+                }}
+              />
+            )}
+
+            {/* Company lines */}
+            {showMultipleLines &&
+              companies.map((company, index) => (
+                <Line
+                  key={company}
+                  type="monotone"
+                  dataKey={company}
+                  name={company}
+                  stroke={COMPANY_COLORS[index % COMPANY_COLORS.length]}
+                  strokeWidth={1.5}
+                  dot={{
+                    r: 3,
+                    fill: 'var(--paper)',
+                    stroke: COMPANY_COLORS[index % COMPANY_COLORS.length],
+                    strokeWidth: 1.5,
+                  }}
+                  activeDot={{
+                    r: 5,
+                    fill: COMPANY_COLORS[index % COMPANY_COLORS.length],
+                    stroke: 'var(--paper)',
+                    strokeWidth: 2,
+                  }}
+                />
+              ))}
+
+            {/* Comparison line */}
+            {hasComparison && (
+              <Line
+                type="monotone"
+                dataKey="comparisonTotal"
+                name={comparisonLabel || 'Anterior'}
+                stroke="var(--ink-faint)"
+                strokeWidth={1}
+                strokeDasharray="4 4"
+                dot={false}
+                activeDot={{
+                  r: 4,
+                  fill: 'var(--ink-faint)',
+                  stroke: 'var(--paper)',
+                  strokeWidth: 2,
+                }}
+                connectNulls
+              />
+            )}
+
+            {/* Total line */}
+            <Line
+              type="monotone"
+              dataKey="total"
+              name="total"
+              stroke="var(--ink)"
+              strokeWidth={showMultipleLines ? 2 : 1.5}
+              strokeDasharray={showMultipleLines ? '4 4' : undefined}
+              dot={
+                showMultipleLines
+                  ? false
+                  : {
+                      r: 3,
+                      fill: 'var(--paper)',
+                      stroke: 'var(--ink)',
+                      strokeWidth: 1.5,
+                    }
+              }
+              activeDot={{
+                r: 5,
+                fill: 'var(--ink)',
+                stroke: 'var(--paper)',
+                strokeWidth: 2,
+              }}
+            >
+              {!showMultipleLines && !isMobile && data.length <= 31 && (
+                <LabelList
+                  dataKey="total"
+                  position="top"
+                  offset={8}
+                  formatter={(value) => value != null ? formatCompact(Number(value)) : ''}
+                  style={{
+                    fontSize: 9,
+                    fill: '#9a9a9a',
+                    fontWeight: 500,
+                  }}
+                />
+              )}
+            </Line>
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}

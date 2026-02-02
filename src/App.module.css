@@ -1,0 +1,267 @@
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-height: 100vh;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.title {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+  color: var(--ink);
+  margin: 0;
+}
+
+.period {
+  font-size: var(--text-sm);
+  color: var(--ink-faint);
+}
+
+/* Filters */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: flex-end;
+  padding-bottom: var(--space-6);
+  border-bottom: 1px solid var(--line);
+}
+
+.filtersDivider {
+  width: 1px;
+  height: 24px;
+  background: var(--line);
+  flex-shrink: 0;
+}
+
+.clearButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.clearButton:hover:not(:disabled) {
+  border-color: var(--ink-faint);
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.clearButton:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.editMetasButton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--ink);
+  border: none;
+  border-radius: 6px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--paper);
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.editMetasButton:hover {
+  opacity: 0.9;
+}
+
+/* KPIs row */
+.kpiRow {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-6);
+}
+
+.kpiCards {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  flex-shrink: 0;
+  min-width: 420px;
+}
+
+.kpiDivider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--line);
+}
+
+.kpiRow > *:last-child {
+  flex: 1;
+}
+
+/* Charts */
+.charts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.chartRow {
+  display: flex;
+  gap: var(--space-6);
+  align-items: flex-start;
+}
+
+.mainChart {
+  flex: 1;
+  min-width: 0;
+}
+
+.sideChart {
+  width: 240px;
+  flex-shrink: 0;
+}
+
+.fullWidthChart {
+  width: 100%;
+}
+
+/* Data Entry */
+.dataEntry {
+  padding: var(--space-4) 0;
+  max-width: 100%;
+  overflow: visible;
+}
+
+/* Grid for breakdowns */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-6);
+}
+
+.gridItem {
+  min-width: 0;
+}
+
+/* Responsive */
+@media (max-width: 1000px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .app {
+    padding: var(--space-4) var(--space-4);
+    gap: var(--space-5);
+  }
+
+  .header {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .headerRight {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .title {
+    font-size: var(--text-lg);
+  }
+
+  .filters {
+    gap: var(--space-3);
+    padding-bottom: var(--space-4);
+  }
+
+  .filtersDivider {
+    display: none;
+  }
+
+  .kpiRow {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .kpiCards {
+    width: 100%;
+    min-width: auto;
+    padding: var(--space-4);
+    gap: var(--space-4);
+  }
+
+  .chartRow {
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .sideChart {
+    width: 100%;
+  }
+
+  .grid {
+    gap: var(--space-4);
+  }
+}
+
+/* Small mobile */
+@media (max-width: 480px) {
+  .app {
+    padding: var(--space-3);
+    gap: var(--space-4);
+  }
+
+  .kpiCards {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .kpiDivider {
+    width: 100%;
+    height: 1px;
+    align-self: auto;
+  }
+}
