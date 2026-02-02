@@ -1,9 +1,7 @@
-import { useMemo, useState } from 'react';
-import { useGoogleSheets } from './hooks/useGoogleSheets';
-import { useLocalEntries } from './hooks/useLocalEntries';
+import { useState } from 'react';
+import { useSupabaseFaturamento } from './hooks/useSupabaseFaturamento';
 import { useFilters } from './hooks/useFilters';
 import { useGoals } from './hooks/useGoals';
-import { getFallbackData } from './data/fallbackData';
 import { formatBRL, formatPercent } from './utils/dataParser';
 import { ViewToggle, type ViewType } from './components/ViewToggle';
 import { MultiSelect } from './components/MultiSelect';
@@ -19,17 +17,12 @@ import { ComparisonToggle } from './components/ComparisonToggle';
 import { DataEntry } from './components/DataEntry';
 import { BreakdownBars } from './components/BreakdownBars';
 import { SharePieChart } from './components/SharePieChart';
-import { ConnectionStatus } from './components/ConnectionStatus';
 import { RotateCcw, Settings2 } from 'lucide-react';
 import styles from './App.module.css';
 
 function App() {
-  const fallbackData = useMemo(() => getFallbackData(), []);
-  const { data: rawData, loading, isConnected, lastUpdated, refresh } =
-    useGoogleSheets(fallbackData);
-
-  // Merge localStorage entries with raw data
-  const { mergedData: data } = useLocalEntries(rawData);
+  // All data comes from Supabase
+  const { data, upsertEntry } = useSupabaseFaturamento();
 
   const [currentView, setCurrentView] = useState<ViewType>('geral');
   const [showGoalEditor, setShowGoalEditor] = useState(false);
@@ -94,12 +87,6 @@ function App() {
             </button>
           )}
           <ViewToggle value={currentView} onChange={setCurrentView} />
-          <ConnectionStatus
-            isConnected={isConnected}
-            lastUpdated={lastUpdated}
-            onRefresh={refresh}
-            loading={loading}
-          />
         </div>
       </header>
 
@@ -311,7 +298,11 @@ function App() {
 
       {currentView === 'entrada' && (
         <section className={styles.dataEntry}>
-          <DataEntry data={data} goals={yearlyGoals} />
+          <DataEntry
+            data={data}
+            goals={yearlyGoals}
+            onSave={upsertEntry}
+          />
         </section>
       )}
 

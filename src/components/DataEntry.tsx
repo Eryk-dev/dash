@@ -12,6 +12,7 @@ function toDateInputValue(date: Date): string {
 interface DataEntryProps {
   data: FaturamentoRecord[];
   goals: CompanyYearlyGoal[];
+  onSave: (empresa: string, date: string, valor: number) => Promise<{ success: boolean; error?: string }>;
 }
 
 interface DayColumn {
@@ -38,7 +39,7 @@ function getShortLabel(date: Date): string {
   return date.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' }).replace('.', '');
 }
 
-export function DataEntry({ data, goals }: DataEntryProps) {
+export function DataEntry({ data, goals, onSave }: DataEntryProps) {
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -296,18 +297,12 @@ export function DataEntry({ data, goals }: DataEntryProps) {
 
   // Track days signature to detect changes
   const daysSignature = daysToShow.map(d => d.date.toISOString().split('T')[0]).join(',');
-  const [lastDaysSignature, setLastDaysSignature] = useState('');
+  const dataSignature = data.map(d => `${d.empresa}:${d.data.toISOString().split('T')[0]}:${d.faturamento}`).join(',');
+  const [lastSignature, setLastSignature] = useState('');
 
-  // Initialize/reset values when days change
-  if (daysSignature !== lastDaysSignature && daysToShow.length > 0) {
-    // Load from localStorage
-    let storedValues: Record<string, number> = {};
-    try {
-      storedValues = JSON.parse(localStorage.getItem('faturamento-entries') || '{}');
-    } catch (e) {
-      console.error('Error loading from localStorage:', e);
-    }
-
+  // Initialize/reset values when days or data change
+  const currentSignature = `${daysSignature}|${dataSignature}`;
+  if (currentSignature !== lastSignature && daysToShow.length > 0) {
     const newValues = new Map<string, number | null>();
     const newSavedFields = new Set<string>();
 
@@ -315,14 +310,10 @@ export function DataEntry({ data, goals }: DataEntryProps) {
       const dateKey = day.date.toISOString().split('T')[0];
       companies.forEach(c => {
         const key = `${c.empresa}:${dateKey}`;
-        // Priority: localStorage > existing data > null
-        const storedValue = storedValues[key];
+        // Get value from Supabase data
         const existing = existingData.get(key);
 
-        if (storedValue !== undefined) {
-          newValues.set(key, storedValue);
-          newSavedFields.add(key);
-        } else if (existing !== undefined) {
+        if (existing !== undefined && existing > 0) {
           newValues.set(key, existing);
           newSavedFields.add(key);
         } else {
@@ -332,7 +323,7 @@ export function DataEntry({ data, goals }: DataEntryProps) {
     });
     setValues(newValues);
     setSavedFields(newSavedFields);
-    setLastDaysSignature(daysSignature);
+    setLastSignature(currentSignature);
   }
 
   // Calculate stats per day
@@ -384,7 +375,7 @@ export function DataEntry({ data, goals }: DataEntryProps) {
   const [isSaving, setIsSaving] = useState(false);
   const savingTimeoutRef = useRef<any>(null);
 
-  const handleValueChange = useCallback((empresa: string, dateKey: string, rawValue: string) => {
+  const handleValueChange = useCallback(async (empresa: string, dateKey: string, rawValue: string) => {
     // Allow only digits and a single comma
     const sanitizedValue = rawValue.replace(/[^\d,]/g, '');
 
@@ -397,47 +388,40 @@ export function DataEntry({ data, goals }: DataEntryProps) {
     setEditingValue(finalValue);
 
     const cleanValue = finalValue.replace(',', '.');
-    const numValue = cleanValue ? parseFloat(cleanValue) : null;
+    const numValue = cleanValue ? parseFloat(cleanValue) : 0;
     const key = `${empresa}:${dateKey}`;
 
     setValues(prev => {
       const next = new Map(prev);
-      next.set(key, numValue);
+      next.set(key, numValue || null);
       return next;
     });
 
-    // Auto-save to localStorage
-    try {
+    // Auto-save to Supabase with debounce
+    if (savingTimeoutRef.current) clearTimeout(savingTimeoutRef.current);
+
+    savingTimeoutRef.current = setTimeout(async () => {
       setIsSaving(true);
-      if (savingTimeoutRef.current) clearTimeout(savingTimeoutRef.current);
-      savingTimeoutRef.current = setTimeout(() => setIsSaving(false), 800);
 
-      const storageKey = 'faturamento-entries';
-      const stored = JSON.parse(localStorage.getItem(storageKey) || '{}');
-      if (numValue !== null) {
-        stored[key] = numValue;
+      const result = await onSave(empresa, dateKey, numValue);
+
+      if (result.success) {
+        setSavedFields(prev => {
+          const next = new Set(prev);
+          if (numValue > 0) {
+            next.add(key);
+          } else {
+            next.delete(key);
+          }
+          return next;
+        });
       } else {
-        delete stored[key];
+        console.error('Error saving:', result.error);
       }
-      localStorage.setItem(storageKey, JSON.stringify(stored));
 
-      // Dispatch event to notify other components
-      window.dispatchEvent(new Event('localEntriesUpdated'));
-
-      // Mark as saved
-      setSavedFields(prev => {
-        const next = new Set(prev);
-        if (numValue !== null) {
-          next.add(key);
-        } else {
-          next.delete(key);
-        }
-        return next;
-      });
-    } catch (e) {
-      console.error('Error saving to localStorage:', e);
-    }
-  }, []);
+      setTimeout(() => setIsSaving(false), 500);
+    }, 500);
+  }, [onSave]);
 
   const handleFocus = useCallback((key: string, value: number | null) => {
     setFocusedField(key);

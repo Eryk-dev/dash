@@ -12,10 +12,6 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build arguments for environment variables
-ARG VITE_GOOGLE_SHEETS_URL
-ENV VITE_GOOGLE_SHEETS_URL=$VITE_GOOGLE_SHEETS_URL
-
 # Build the app
 RUN npm run build
 
