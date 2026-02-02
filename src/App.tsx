@@ -18,6 +18,7 @@ import { DataEntry } from './components/DataEntry';
 import { BreakdownBars } from './components/BreakdownBars';
 import { SharePieChart } from './components/SharePieChart';
 import { RotateCcw, Settings2 } from 'lucide-react';
+import logo from './assets/logo.svg';
 import styles from './App.module.css';
 
 function App() {
@@ -72,8 +73,7 @@ function App() {
     <div className={styles.app}>
       <header className={styles.header}>
         <div className={styles.headerLeft}>
-          <h1 className={styles.title}>Faturamento</h1>
-          <span className={styles.period}>Fevereiro 2026</span>
+          <img src={logo} alt="Lever Money" className={styles.logo} />
         </div>
         <div className={styles.headerRight}>
           {currentView === 'metas' && (
