@@ -103,9 +103,19 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
 
   const chartHeight = isMobile ? 220 : 280;
   const maxIndex = Math.max(chartData.length - 1, 0);
-  const getLabelFromIndex = (value: number | string) => {
+  const getLabelFromIndex = (value: number | string): string => {
     const idx = typeof value === 'string' ? Number(value) : value;
-    return chartData[idx]?.dateLabel || '';
+    const rawLabel = chartData[idx]?.dateLabel;
+    if (typeof rawLabel === 'string') return rawLabel;
+    if (rawLabel != null) return String(rawLabel);
+    return '';
+  };
+  const formatAxisLabel = (value: number | string) => getLabelFromIndex(value);
+  const formatTooltipLabel = (label: unknown): string => {
+    if (typeof label === 'string' || typeof label === 'number') {
+      return getLabelFromIndex(label);
+    }
+    return '';
   };
 
   if (data.length === 0) {
@@ -136,7 +146,7 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
               tick={{ fontSize: isMobile ? 10 : 11, fill: 'var(--ink-faint)' }}
               tickMargin={8}
               interval="preserveStartEnd"
-              tickFormatter={getLabelFromIndex}
+              tickFormatter={formatAxisLabel}
               padding={{ left: 20, right: 20 }}
             />
             <YAxis
@@ -149,7 +159,7 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
               domain={[yAxisMin, yAxisMax || 'auto']}
             />
             <Tooltip
-              labelFormatter={getLabelFromIndex}
+              labelFormatter={formatTooltipLabel}
               content={({ active, payload, label }) => {
                 if (active && payload && payload.length) {
                   const currentTotal = payload.find((p) => p.dataKey === 'total')?.value as number | undefined;
@@ -159,7 +169,7 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
                   const delta = currentTotal && compTotal ? ((currentTotal - compTotal) / compTotal) * 100 : null;
                   const gap = currentTotal && goalValue !== null ? currentTotal - goalValue : null;
 
-                  const displayLabel = typeof label === 'string' ? label : getLabelFromIndex(label as number);
+                  const displayLabel = formatTooltipLabel(label);
                   return (
                     <div className={styles.tooltip}>
                       <span className={styles.tooltipDate}>{displayLabel}</span>
