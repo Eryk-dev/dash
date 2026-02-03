@@ -1,7 +1,7 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-2);
 }
 
 .header {
@@ -18,175 +18,13 @@
   letter-spacing: 0.05em;
 }
 
-.legend {
-  display: flex;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.legendItem {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.legendDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-
-.legendLabel {
-  font-size: var(--text-xs);
-  color: var(--ink-muted);
-}
-
-.chart {
-  display: flex;
-  gap: var(--space-2);
-  height: 200px;
-}
-
-.yAxis {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: flex-end;
-  padding-bottom: 20px;
-  width: 40px;
-  flex-shrink: 0;
-}
-
-.yLabel {
-  font-size: 10px;
-  color: var(--ink-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-.chartArea {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.drawingArea {
-  flex: 1;
-  position: relative;
-  border-left: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-
-.gridLine {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: var(--line);
-  pointer-events: none;
-}
-
-.goalLine {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: #23D8D3;
-  pointer-events: none;
-  z-index: 2;
-}
-
-.goalLabel {
-  position: absolute;
-  left: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  padding-left: var(--space-2);
-  font-size: 10px;
-  font-weight: 500;
-  color: #23D8D3;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.bars {
-  display: flex;
-  align-items: flex-end;
-  height: 100%;
-  padding: 0 var(--space-2);
-  gap: 2px;
-}
-
-.barColumn {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 0;
-  height: 100%;
-}
-
-.barStack {
-  flex: 1;
+.chartWrapper {
   width: 100%;
-  max-width: 24px;
-  display: flex;
-  flex-direction: column-reverse;
-  align-items: stretch;
-  position: relative;
-}
-
-.comparisonOutline {
-  position: absolute;
-  bottom: 0;
-  left: -2px;
-  right: -2px;
-  border: 1px dashed var(--ink-faint);
-  background: transparent;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.barSegment {
-  width: 100%;
-  min-height: 1px;
-  transition: opacity 0.15s ease;
-  position: relative;
-  z-index: 2;
-}
-
-.barSegment:hover {
-  opacity: 0.8;
-}
-
-.xAxis {
-  display: flex;
-  height: 20px;
-  padding: 0 var(--space-2);
-  gap: 2px;
-  border-left: 1px solid transparent; /* Match drawingArea border */
-}
-
-.xLabelWrapper {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  min-width: 0;
-}
-
-.xLabel {
-  font-size: 9px;
-  color: var(--ink-faint);
-  margin-top: var(--space-1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-  text-align: center;
+  height: 280px;
 }
 
 .empty {
-  height: 200px;
+  height: 240px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -194,11 +32,8 @@
   font-size: var(--text-sm);
 }
 
-/* Tooltip */
+/* Tooltip - Recharts uses custom content */
 .tooltip {
-  position: fixed;
-  transform: translate(-50%, -100%);
-  margin-top: -8px;
   background: var(--ink);
   color: var(--paper);
   padding: var(--space-3);
@@ -207,8 +42,6 @@
   flex-direction: column;
   gap: var(--space-2);
   min-width: 140px;
-  pointer-events: none;
-  z-index: 100;
 }
 
 .tooltipDate {
@@ -266,19 +99,6 @@
   font-weight: 600;
 }
 
-.tooltipComparison {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--text-sm);
-  opacity: 0.7;
-}
-
-.tooltipDelta {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  text-align: right;
-}
-
 @media (max-width: 768px) {
   .header {
     flex-direction: column;
@@ -286,23 +106,11 @@
     gap: var(--space-2);
   }
 
-  .legend {
-    gap: var(--space-3);
+  .chartWrapper {
+    height: 220px;
   }
 
-  .chart {
-    height: 160px;
-  }
-
-  .yAxis {
-    width: 32px;
-  }
-
-  .barStack {
-    max-width: 16px;
-  }
-
-  .xLabel {
-    font-size: 8px;
+  .empty {
+    height: 200px;
   }
 }

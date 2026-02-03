@@ -1,4 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import {
+  ComposedChart,
+  Bar,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 import { formatDate, formatBRL } from '../utils/dataParser';
 import type { DailyDataPoint } from '../hooks/useFilters';
 import styles from './GroupStackedBars.module.css';
@@ -7,12 +17,11 @@ interface GroupStackedBarsProps {
   data: DailyDataPoint[];
   groups: string[];
   title?: string;
-  dailyGoal?: number;
   comparisonData?: DailyDataPoint[] | null;
   comparisonLabel?: string | null;
 }
 
-// Muted, cohesive palette — no saturated colors
+// Muted, cohesive palette
 const GROUP_COLORS: Record<string, string> = {
   'NETAIR': '#1a1a1a',
   'ACA': '#525252',
@@ -23,7 +32,6 @@ const GROUP_COLORS: Record<string, string> = {
 
 function getGroupColor(grupo: string, index: number): string {
   if (GROUP_COLORS[grupo]) return GROUP_COLORS[grupo];
-  // Fallback: grayscale progression
   const grays = ['#1a1a1a', '#404040', '#666666', '#8c8c8c', '#b3b3b3', '#d9d9d9'];
   return grays[index % grays.length];
 }
@@ -38,50 +46,44 @@ export function GroupStackedBars({
   data,
   groups,
   title = 'Contribuição por Grupo',
-  dailyGoal,
-  comparisonData,
-  comparisonLabel,
 }: GroupStackedBarsProps) {
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const formatAxisDate = (value: number | string | Date) => {
+    if (value instanceof Date) return formatDate(value);
+    const asNumber = typeof value === 'string' ? Number(value) : value;
+    return formatDate(new Date(asNumber));
+  };
 
   const chartData = useMemo(() => {
-    return data.map((d, index) => {
-      const segments: { grupo: string; value: number; color: string }[] = [];
-      let total = 0;
+    return data.map((d) => {
+      const point: Record<string, string | number | null> = {
+        dateKey: d.date.getTime(),
+      };
 
-      groups.forEach((grupo, groupIndex) => {
-        const value = (d[`group_${grupo}`] as number) || 0;
-        if (value > 0) {
-          segments.push({
-            grupo,
-            value,
-            color: getGroupColor(grupo, groupIndex),
-          });
-          total += value;
-        }
+      // Add group values
+      groups.forEach((grupo) => {
+        point[grupo] = (d[`group_${grupo}`] as number) || 0;
       });
 
-      // Get comparison total for this index (aligned by day index)
-      const comparisonTotal = comparisonData && comparisonData[index]
-        ? comparisonData[index].total
-        : null;
+      if (typeof d.goal === 'number') {
+        point.goal = d.goal;
+      }
 
-      return {
-        date: d.date,
-        dateLabel: formatDate(d.date),
-        segments,
-        total,
-        comparisonTotal,
-      };
+      return point;
     });
-  }, [data, groups, comparisonData]);
+  }, [data, groups]);
 
   const maxValue = useMemo(() => {
-    const dataMax = Math.max(...chartData.map((d) => d.total), 0);
-    if (dailyGoal && dailyGoal > dataMax) return dailyGoal;
-    return dataMax;
-  }, [chartData, dailyGoal]);
+    let max = 0;
+    data.forEach((d) => {
+      let total = 0;
+      groups.forEach((grupo) => {
+        total += (d[`group_${grupo}`] as number) || 0;
+      });
+      if (total > max) max = total;
+    });
+    const maxGoal = data.length > 0 ? Math.max(...data.map((d) => d.goal || 0)) : 0;
+    return Math.max(max, maxGoal);
+  }, [data, groups]);
 
   if (data.length === 0 || groups.length === 0) {
     return (
@@ -94,160 +96,138 @@ export function GroupStackedBars({
     );
   }
 
-  const goalPercent = dailyGoal && maxValue > 0 ? (dailyGoal / maxValue) * 100 : null;
+  const hasGoalLine = data.some((d) => (d.goal || 0) > 0);
+  const yAxisMax = maxValue > 0 ? maxValue * 1.1 : undefined;
 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <span className={styles.title}>{title}</span>
-        <div className={styles.legend}>
-          {groups.map((grupo, index) => (
-            <div key={grupo} className={styles.legendItem}>
-              <span
-                className={styles.legendDot}
-                style={{ background: getGroupColor(grupo, index) }}
-              />
-              <span className={styles.legendLabel}>{grupo}</span>
-            </div>
-          ))}
-        </div>
       </div>
+      <div className={styles.chartWrapper}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <XAxis
+              dataKey="dateKey"
+              type="number"
+              domain={['auto', 'auto']}
+              axisLine={false}
+              tickLine={false}
+              tick={{ fontSize: 9, fill: 'var(--ink-faint)' }}
+              tickMargin={8}
+              interval="preserveStartEnd"
+              scale="time"
+              tickFormatter={formatAxisDate}
+            />
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              tick={{ fontSize: 11, fill: 'var(--ink-faint)' }}
+              tickFormatter={(v) => formatCompact(v)}
+              tickMargin={8}
+              width={48}
+              domain={[0, yAxisMax || 'auto']}
+            />
+            <Tooltip
+              content={({ active, payload, label }) => {
+                if (active && payload && payload.length) {
+                  const total = payload
+                    .filter((p) => p.dataKey !== 'goal')
+                    .reduce((sum, p) => sum + (Number(p.value) || 0), 0);
+                  const goalEntry = payload.find((p) => p.dataKey === 'goal');
+                  const goalValue = goalEntry ? Number(goalEntry.value) : null;
+                  const gap = goalValue !== null ? total - goalValue : null;
 
-      <div className={styles.chart}>
-        {/* Y-axis labels */}
-        <div className={styles.yAxis}>
-          <span className={styles.yLabel}>{formatCompact(maxValue)}</span>
-          <span className={styles.yLabel}>{formatCompact(maxValue / 2)}</span>
-          <span className={styles.yLabel}>0</span>
-        </div>
-
-        {/* Chart area with drawing area and x-axis labels */}
-        <div className={styles.chartArea}>
-          <div className={styles.drawingArea}>
-            {/* Goal line */}
-            {goalPercent !== null && (
-              <div
-                className={styles.goalLine}
-                style={{ bottom: `${goalPercent}%` }}
-              >
-                <span className={styles.goalLabel}>{formatCompact(dailyGoal!)}</span>
-              </div>
-            )}
-
-            {/* Grid lines */}
-            <div className={styles.gridLine} style={{ bottom: '50%' }} />
-            <div className={styles.gridLine} style={{ bottom: '0%' }} />
-
-            {/* Bars */}
-            <div className={styles.bars}>
-              {chartData.map((day, dayIndex) => {
-                const comparisonHeightPercent = day.comparisonTotal && maxValue > 0
-                  ? (day.comparisonTotal / maxValue) * 100
-                  : null;
-
-                return (
-                  <div
-                    key={dayIndex}
-                    className={styles.barColumn}
-                    onMouseEnter={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
-                      setHoveredIndex(dayIndex);
-                    }}
-                    onMouseLeave={() => setHoveredIndex(null)}
-                  >
-                    <div className={styles.barStack}>
-                      {/* Comparison outline */}
-                      {comparisonHeightPercent !== null && (
-                        <div
-                          className={styles.comparisonOutline}
-                          style={{
-                            height: `${comparisonHeightPercent}%`,
-                          }}
-                        />
-                      )}
-                      {day.segments.map((seg) => {
-                        const heightPercent = maxValue > 0 ? (seg.value / maxValue) * 100 : 0;
-                        return (
-                          <div
-                            key={seg.grupo}
-                            className={styles.barSegment}
-                            style={{
-                              height: `${heightPercent}%`,
-                              background: seg.color,
-                            }}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* X-axis labels container */}
-          <div className={styles.xAxis}>
-            {chartData.map((day, dayIndex) => (
-              <div key={dayIndex} className={styles.xLabelWrapper}>
-                <span className={styles.xLabel}>{day.dateLabel}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Tooltip */}
-          {hoveredIndex !== null && chartData[hoveredIndex] && (
-            <div
-              className={styles.tooltip}
-              style={{
-                left: tooltipPos.x,
-                top: tooltipPos.y,
-              }}
-            >
-              <span className={styles.tooltipDate}>{chartData[hoveredIndex].dateLabel}</span>
-              <div className={styles.tooltipItems}>
-                {chartData[hoveredIndex].segments.map((seg) => {
-                  const percent = chartData[hoveredIndex].total > 0
-                    ? ((seg.value / chartData[hoveredIndex].total) * 100).toFixed(0)
-                    : 0;
                   return (
-                    <div key={seg.grupo} className={styles.tooltipItem}>
-                      <span className={styles.tooltipDot} style={{ background: seg.color }} />
-                      <span className={styles.tooltipLabel}>{seg.grupo}</span>
-                      <span className={styles.tooltipPercent}>{percent}%</span>
-                      <span className={styles.tooltipValue}>{formatBRL(seg.value)}</span>
+                    <div className={styles.tooltip}>
+                      <span className={styles.tooltipDate}>
+                        {typeof label === 'string' ? label : formatAxisDate(label as number)}
+                      </span>
+                      <div className={styles.tooltipItems}>
+                        {payload
+                          .filter((entry) => entry.dataKey !== 'goal' && Number(entry.value) > 0)
+                          .map((entry, index) => {
+                            const percent = total > 0
+                              ? ((Number(entry.value) / total) * 100).toFixed(0)
+                              : 0;
+                            return (
+                              <div key={index} className={styles.tooltipItem}>
+                                <span
+                                  className={styles.tooltipDot}
+                                  style={{ background: entry.color }}
+                                />
+                                <span className={styles.tooltipLabel}>{entry.name}</span>
+                                <span className={styles.tooltipPercent}>{percent}%</span>
+                                <span className={styles.tooltipValue}>
+                                  {formatBRL(Number(entry.value))}
+                                </span>
+                              </div>
+                            );
+                          })}
+                      </div>
+                      <div className={styles.tooltipTotal}>
+                        <span>Total</span>
+                        <span>{formatBRL(total)}</span>
+                      </div>
+                      {goalValue !== null && (
+                        <>
+                          <div className={styles.tooltipTotal} style={{ borderTop: 'none', paddingTop: 0, marginTop: 0 }}>
+                            <span style={{ color: '#23D8D3' }}>Meta</span>
+                            <span style={{ color: '#23D8D3' }}>{formatBRL(goalValue)}</span>
+                          </div>
+                          <div className={styles.tooltipTotal} style={{ borderTop: 'none', paddingTop: 0, marginTop: 0 }}>
+                            <span>Gap</span>
+                            <span style={{ color: gap && gap >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                              {gap && gap >= 0 ? '+' : ''}{formatBRL(gap || 0)}
+                            </span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   );
-                })}
-              </div>
-              <div className={styles.tooltipTotal}>
-                <span>Total</span>
-                <span>{formatBRL(chartData[hoveredIndex].total)}</span>
-              </div>
-              {chartData[hoveredIndex].comparisonTotal !== null && (
-                <>
-                  <div className={styles.tooltipComparison}>
-                    <span>{comparisonLabel || 'Anterior'}</span>
-                    <span>{formatBRL(chartData[hoveredIndex].comparisonTotal!)}</span>
-                  </div>
-                  <div
-                    className={styles.tooltipDelta}
-                    style={{
-                      color: chartData[hoveredIndex].total >= chartData[hoveredIndex].comparisonTotal!
-                        ? 'var(--success)'
-                        : 'var(--danger)',
-                    }}
-                  >
-                    {(() => {
-                      const delta = ((chartData[hoveredIndex].total - chartData[hoveredIndex].comparisonTotal!) / chartData[hoveredIndex].comparisonTotal!) * 100;
-                      return `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%`;
-                    })()}
-                  </div>
-                </>
+                }
+                return null;
+              }}
+            />
+            <Legend
+              verticalAlign="top"
+              align="right"
+              height={36}
+              formatter={(value) => (
+                <span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
+                  {value}
+                </span>
               )}
-            </div>
-          )}
-        </div>
+            />
+
+            {/* Stacked bars for each group */}
+            {groups.map((grupo, index) => (
+              <Bar
+                key={grupo}
+                dataKey={grupo}
+                stackId="stack"
+                fill={getGroupColor(grupo, index)}
+                maxBarSize={24}
+              />
+            ))}
+
+            {/* Goal line - same as RevenueChart */}
+            {/* Use linear type for single/few points to avoid curve artifacts */}
+            {hasGoalLine && (
+              <Line
+                type={data.length <= 2 ? 'linear' : 'monotone'}
+                dataKey="goal"
+                name="Meta"
+                stroke="#23D8D3"
+                strokeDasharray="4 4"
+                strokeWidth={1.5}
+                dot={false}
+                activeDot={false}
+                legendType="none"
+              />
+            )}
+          </ComposedChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );

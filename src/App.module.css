@@ -150,6 +150,40 @@
   width: 100%;
 }
 
+.pieSwitcher {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.pieTabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.pieTab {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.pieTab:hover {
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+
+.pieTabActive {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
 /* Data Entry */
 .dataEntry {
   padding: var(--space-4) 0;
@@ -180,6 +214,7 @@
     grid-template-columns: 1fr;
   }
 }
+
 
 @media (max-width: 768px) {
   .app {
@@ -225,6 +260,7 @@
   .chartRow {
     flex-direction: column;
     gap: var(--space-4);
+    align-items: stretch;
   }
 
   .sideChart {

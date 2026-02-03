@@ -17,6 +17,7 @@ import styles from './GoalsDashboard.module.css';
 interface CompanyGoalData {
   empresa: string;
   grupo: string;
+  segmento: string;
   realizado: number;
   metaMensal: number;
   metaProporcional: number;
@@ -50,14 +51,16 @@ interface GoalsDashboardProps {
   dailyData?: DailyDataPoint[];
   allHistoricalData?: DailyDataPoint[]; // All historical data for projections
   rawDataForSeasonality?: RawSeasonalityRecord[]; // Raw data with empresa/grupo for seasonality
+  getGoalForDate?: (date: Date) => number;
   realizadoHoje?: number;
   metaHoje?: number;
   realizadoSemana?: number;
   metaSemana?: number;
-  diasNaSemana?: number;
-  diaAtualSemana?: number;
+  esperadoSemanal?: number;
   realizadoAno?: number;
   metaAno?: number;
+  metasMensais?: number[];
+  mesAtual?: number;
 }
 
 type Status = 'ahead' | 'on-track' | 'behind';
@@ -82,14 +85,16 @@ export function GoalsDashboard({
   dailyData = [],
   allHistoricalData,
   rawDataForSeasonality,
+  getGoalForDate,
   realizadoHoje = 0,
   metaHoje = 0,
   realizadoSemana = 0,
   metaSemana = 0,
-  diasNaSemana = 5,
-  diaAtualSemana = 1,
+  esperadoSemanal = 0,
   realizadoAno = 0,
   metaAno = 0,
+  metasMensais,
+  mesAtual = new Date().getMonth() + 1,
 }: GoalsDashboardProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
@@ -100,6 +105,7 @@ export function GoalsDashboard({
     return data.filter((item) => {
       if (filters.grupos.length > 0 && !filters.grupos.includes(item.grupo)) return false;
       if (filters.empresas.length > 0 && !filters.empresas.includes(item.empresa)) return false;
+      if (filters.segmentos.length > 0 && !filters.segmentos.includes(item.segmento)) return false;
       return true;
     });
   }, [data, filters]);
@@ -140,22 +146,17 @@ export function GoalsDashboard({
 
   // Period data for cards
   const periodData = useMemo(() => {
-    const metaDiaria = displayMeta / diasNoMes;
-    const metaSemanalCalc = metaSemana || metaDiaria * diasNaSemana;
-    const metaPropHoje = metaDiaria;
-    const metaPropSemana = metaDiaria * diaAtualSemana;
-
     return {
       hoje: {
         realizado: realizadoHoje,
-        meta: metaDiaria,
-        metaProporcional: metaPropHoje,
+        meta: metaHoje,
+        metaProporcional: metaHoje,
         coverage: coverage?.dia,
       },
       semana: {
         realizado: realizadoSemana,
-        meta: metaSemanalCalc,
-        metaProporcional: metaPropSemana,
+        meta: metaSemana,
+        metaProporcional: esperadoSemanal,
         coverage: coverage?.semana,
       },
       mes: {
@@ -167,11 +168,24 @@ export function GoalsDashboard({
       ano: metaAno > 0 ? {
         realizado: realizadoAno,
         meta: metaAno,
-        metaProporcional: metaAno * (new Date().getMonth() + 1) / 12,
+        metaProporcional: metaAno * (mesAtual / 12),
         coverage: coverage?.ano,
       } : undefined,
     };
-  }, [displayRealizado, displayMeta, displayMetaProp, diasNoMes, realizadoHoje, metaHoje, realizadoSemana, metaSemana, diasNaSemana, diaAtualSemana, realizadoAno, metaAno, coverage]);
+  }, [
+    displayRealizado,
+    displayMeta,
+    displayMetaProp,
+    realizadoHoje,
+    metaHoje,
+    realizadoSemana,
+    metaSemana,
+    esperadoSemanal,
+    realizadoAno,
+    metaAno,
+    mesAtual,
+    coverage,
+  ]);
 
   const toggleGroup = (grupo: string) => {
     setExpandedGroups(prev => {
@@ -244,8 +258,10 @@ export function GoalsDashboard({
             allHistoricalData={allHistoricalData}
             metaMensal={displayMeta}
             metaAno={metaAno}
+            monthlyGoals={metasMensais}
             diasNoMes={diasNoMes}
             diaAtual={diaAtual}
+            getGoalForDate={getGoalForDate}
             datePreset={datePreset}
             mesReferencia={dailyData.length > 0
               ? dailyData.reduce((latest, d) => d.date > latest ? d.date : latest, dailyData[0].date).getMonth() + 1

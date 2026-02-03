@@ -38,17 +38,22 @@ export interface GoalMetrics {
   diasNoMes: number;
   diaAtual: number;             // Dia D-1 (ontem) para cálculo de esperado
   // Week metrics
-  metaSemana: number;           // Meta da semana (7 dias completos)
+  metaSemana: number;           // Meta da semana (soma das metas diárias ajustadas)
   realizadoSemana: number;      // Faturamento realizado na semana até D-1
-  diasNaSemana: number;         // Dias na semana até D-1
+  diasNaSemana: number;         // Dias na semana até D-1 (calendário)
+  esperadoSemanal: number;      // Meta esperada até D-1 (ajustada para AR COND)
   // Day metrics
-  metaDia: number;              // Meta do dia
+  metaDia: number;              // Meta do dia base (metaMensal / diasNoMes)
+  metaDiaAjustada: number;      // Meta do dia ajustada (regra AR COND aplicada)
   realizadoDia: number;         // Faturamento realizado no dia (D-1)
   // Year metrics
   metaAno: number;              // Meta do ano
   realizadoAno: number;         // Faturamento realizado no ano até D-1
   mesesNoAno: number;           // Meses no ano (12)
   mesAtual: number;             // Mês de D-1 (1-12)
+  metasMensais: number[];       // Metas mensais (Jan-Dez) para o contexto filtrado
+  // AR CONDICIONADO specific
+  isArCondicionado: boolean;    // Se o contexto é 100% AR CONDICIONADO
   coverage: {
     dia: CoverageMetrics;
     semana: CoverageMetrics;

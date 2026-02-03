@@ -13,13 +13,17 @@ interface GoalSummaryProps {
   metaSemana: number;
   realizadoSemana: number;
   diasNaSemana: number;
+  esperadoSemanal: number;
   // Day metrics
   metaDia: number;
+  metaDiaAjustada: number;
   realizadoDia: number;
   // Year metrics
   metaAno: number;
   realizadoAno: number;
   mesAtual: number;
+  // AR CONDICIONADO specific
+  isArCondicionado: boolean;
 }
 
 interface ProgressBarProps {
@@ -82,7 +86,8 @@ export function GoalSummary({
   metaSemana,
   realizadoSemana,
   diasNaSemana,
-  metaDia,
+  esperadoSemanal,
+  metaDiaAjustada,
   realizadoDia,
   metaAno,
   realizadoAno,
@@ -109,14 +114,14 @@ export function GoalSummary({
           <ProgressBar
             label="Meta Diária"
             realizado={realizadoDia}
-            meta={metaDia}
+            meta={metaDiaAjustada}
           />
           <div className={styles.divider} />
           <ProgressBar
             label="Meta Semanal"
             realizado={realizadoSemana}
             meta={metaSemana}
-            expected={(metaSemana / 7) * diasNaSemana}
+            expected={esperadoSemanal}
             expectedLabel={`vs esperado (${diasNaSemana} dias)`}
           />
         </>
@@ -129,7 +134,7 @@ export function GoalSummary({
             label="Meta Semanal"
             realizado={realizadoSemana}
             meta={metaSemana}
-            expected={(metaSemana / 7) * diasNaSemana}
+            expected={esperadoSemanal}
             expectedLabel={`vs esperado (${diasNaSemana} dias)`}
           />
           <div className={styles.divider} />

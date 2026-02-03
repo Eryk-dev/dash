@@ -3,6 +3,11 @@ import { Check, AlertCircle, Calendar, ChevronLeft, ChevronRight } from 'lucide-
 import type { FaturamentoRecord } from '../types';
 import type { CompanyYearlyGoal } from '../data/goals';
 import { formatBRL } from '../utils/dataParser';
+import {
+  buildCompanyMetaInfo,
+  getCompanyAdjustedDailyGoal,
+  getCompanyDailyBaseGoal,
+} from '../utils/goalCalculator';
 import styles from './DataEntry.module.css';
 
 function toMonthInputValue(date: Date): string {
@@ -96,18 +101,27 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
 
   // Use first day for month calculations
   const referenceDate = daysToShow[0]?.date || today;
-  const currentMonth = referenceDate.getMonth() + 1;
-  const daysInMonth = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0).getDate();
+  const companyMetaInfo = useMemo(() => buildCompanyMetaInfo(goals), [goals]);
 
-  // Build company info from goals
+  // Build company info from goals (with adjusted daily targets)
   const companies = useMemo(() => {
-    return goals.map(g => ({
-      empresa: g.empresa,
-      grupo: g.grupo,
-      dailyGoal: (g.metas[currentMonth] || 0) / daysInMonth,
-      segmento: data.find(d => d.empresa === g.empresa)?.segmento || 'OUTROS'
-    }));
-  }, [goals, currentMonth, daysInMonth, data]);
+    return companyMetaInfo.map(company => {
+      const baseDailyGoal = getCompanyDailyBaseGoal(company, referenceDate);
+      const weekdayGoal = company.segmento === 'AR CONDICIONADO'
+        ? baseDailyGoal * 1.2
+        : baseDailyGoal;
+      const weekendGoal = company.segmento === 'AR CONDICIONADO'
+        ? baseDailyGoal * 0.5
+        : baseDailyGoal;
+
+      return {
+        ...company,
+        baseDailyGoal,
+        weekdayGoal,
+        weekendGoal,
+      };
+    });
+  }, [companyMetaInfo, referenceDate]);
 
   // Get existing data for all days
   const existingData = useMemo(() => {
@@ -173,7 +187,7 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
           total += value;
           filledCount++;
         }
-        goalTotal += c.dailyGoal;
+        goalTotal += getCompanyAdjustedDailyGoal(c, day.date);
       });
 
       return {
@@ -205,7 +219,7 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
-  const savingTimeoutRef = useRef<any>(null);
+  const savingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleValueChange = useCallback(async (empresa: string, dateKey: string, rawValue: string) => {
     // Allow only digits and a single comma
@@ -301,7 +315,7 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
         nextInput?.select();
       }
     }
-  }, [groups, daysToShow]);
+  }, [groups, daysToShow, editingKey]);
 
   // Calculate week total
   const weekTotal = dayStats.reduce((sum, d) => sum + d.total, 0);
@@ -404,7 +418,13 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
                   <div key={entry.empresa} className={styles.entryRow}>
                     <div className={styles.entryInfo}>
                       <span className={styles.entryName} title={entry.empresa}>{entry.empresa}</span>
-                      <span className={styles.entryGoal}>meta: {formatBRL(entry.dailyGoal)}</span>
+                      {entry.segmento === 'AR CONDICIONADO' ? (
+                        <span className={styles.entryGoal}>
+                          meta útil: {formatBRL(entry.weekdayGoal)} / meta fds: {formatBRL(entry.weekendGoal)}
+                        </span>
+                      ) : (
+                        <span className={styles.entryGoal}>meta: {formatBRL(entry.baseDailyGoal)}</span>
+                      )}
                     </div>
 
                     {daysToShow.map((day) => {
@@ -414,10 +434,11 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
                       const isFocused = focusedField === key;
                       const isSaved = savedFields.has(key);
                       const hasValue = value !== null;
+                      const adjustedGoal = getCompanyAdjustedDailyGoal(entry, day.date);
 
                       // Using a small epsilon or rounding for currency comparison to avoid float issues
-                      const isAboveGoal = hasValue && (Math.round(value * 100) / 100) >= (Math.round(entry.dailyGoal * 100) / 100);
-                      const isBelowGoal = hasValue && (Math.round(value * 100) / 100) < (Math.round(entry.dailyGoal * 100) / 100);
+                      const isAboveGoal = hasValue && (Math.round(value * 100) / 100) >= (Math.round(adjustedGoal * 100) / 100);
+                      const isBelowGoal = hasValue && (Math.round(value * 100) / 100) < (Math.round(adjustedGoal * 100) / 100);
 
                       const displayValue = editingKey === key
                         ? editingValue

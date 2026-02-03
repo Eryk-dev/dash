@@ -18,7 +18,7 @@ export function GoalProgress({ metrics }: GoalProgressProps) {
   } = metrics;
 
   const progressPercent = Math.min(percentualMeta, 100);
-  const expectedPercent = (diaAtual / diasNoMes) * 100;
+  const expectedPercent = metaMensal > 0 ? (metaProporcional / metaMensal) * 100 : 0;
   const isAhead = gapProporcional >= 0;
 
   if (metaMensal === 0) {

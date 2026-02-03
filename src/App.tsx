@@ -27,8 +27,9 @@ function App() {
 
   const [currentView, setCurrentView] = useState<ViewType>('geral');
   const [showGoalEditor, setShowGoalEditor] = useState(false);
+  const [pieMode, setPieMode] = useState<'segmento' | 'grupo' | 'empresa'>('segmento');
 
-  const { goals, yearlyGoals, totalGoal, totalYearGoal, updateYearlyGoals, getCompanyGoal, getGroupGoal, setSelectedMonth } = useGoals();
+  const { yearlyGoals, updateYearlyGoals, setSelectedMonth } = useGoals();
 
   const {
     filters,
@@ -42,6 +43,7 @@ function App() {
     comparisonEnabled,
     customComparisonStart,
     customComparisonEnd,
+    getGoalForDate,
     chartCompanies,
     allGroupsInData,
     groupBreakdown,
@@ -57,15 +59,12 @@ function App() {
     toggleComparison,
     setCustomComparisonRange,
     clearCustomComparison,
-  } = useFilters(data, { goals, totalGoal, totalYearGoal, getCompanyGoal, getGroupGoal, setSelectedMonth });
+  } = useFilters(data, { yearlyGoals, setSelectedMonth });
 
   const hasEntityFilter =
     filters.empresas.length > 0 ||
     filters.grupos.length > 0 ||
     filters.segmentos.length > 0;
-
-  // Use the daily goal from goalMetrics (already calculated from micro to macro)
-  const dailyGoal = goalMetrics.metaDia;
 
   // Aggregate all data by date for historical projections
   const allHistoricalDailyData = useMemo(() => {
@@ -98,6 +97,37 @@ function App() {
       grupo: record.grupo,
     }));
   }, [data]);
+
+  const groupPieData = useMemo(() => {
+    return groupBreakdown.map((item) => ({
+      name: item.grupo,
+      value: item.total,
+    }));
+  }, [groupBreakdown]);
+
+  const empresaPieData = useMemo(() => {
+    const limit = 6;
+    const top = empresaBreakdown.slice(0, limit);
+    const rest = empresaBreakdown.slice(limit);
+    const restTotal = rest.reduce((sum, item) => sum + item.total, 0);
+    const base = top.map((item) => ({ name: item.empresa, value: item.total }));
+    if (restTotal > 0) {
+      base.push({ name: 'Outros', value: restTotal });
+    }
+    return base;
+  }, [empresaBreakdown]);
+
+  const pieConfig = useMemo(() => {
+    switch (pieMode) {
+      case 'grupo':
+        return { title: 'Por Grupo', data: groupPieData };
+      case 'empresa':
+        return { title: 'Por Empresa', data: empresaPieData };
+      case 'segmento':
+      default:
+        return { title: 'Por Segmento', data: segmentPieData };
+    }
+  }, [pieMode, groupPieData, empresaPieData, segmentPieData]);
 
   const handleSaveEntry = useCallback(async (empresa: string, date: string, valor: number | null) => {
     if (valor === null) {
@@ -213,11 +243,14 @@ function App() {
               metaSemana={goalMetrics.metaSemana}
               realizadoSemana={goalMetrics.realizadoSemana}
               diasNaSemana={goalMetrics.diasNaSemana}
+              esperadoSemanal={goalMetrics.esperadoSemanal}
               metaDia={goalMetrics.metaDia}
+              metaDiaAjustada={goalMetrics.metaDiaAjustada}
               realizadoDia={goalMetrics.realizadoDia}
               metaAno={goalMetrics.metaAno}
               realizadoAno={goalMetrics.realizadoAno}
               mesAtual={goalMetrics.mesAtual}
+              isArCondicionado={goalMetrics.isArCondicionado}
             />
           </section>
 
@@ -226,17 +259,41 @@ function App() {
               <RevenueChart
                 data={dailyData}
                 companies={chartCompanies}
-                dailyGoal={dailyGoal}
                 comparisonData={comparisonDailyData}
                 comparisonLabel={comparisonLabel}
               />
             </div>
             <div className={styles.sideChart}>
-              <SharePieChart
-                title="Por Segmento"
-                data={segmentPieData}
-                showLegend
-              />
+              <div className={styles.pieSwitcher}>
+                <div className={styles.pieTabs}>
+                  <button
+                    type="button"
+                    className={`${styles.pieTab} ${pieMode === 'segmento' ? styles.pieTabActive : ''}`}
+                    onClick={() => setPieMode('segmento')}
+                  >
+                    Segmento
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.pieTab} ${pieMode === 'grupo' ? styles.pieTabActive : ''}`}
+                    onClick={() => setPieMode('grupo')}
+                  >
+                    Grupo
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.pieTab} ${pieMode === 'empresa' ? styles.pieTabActive : ''}`}
+                    onClick={() => setPieMode('empresa')}
+                  >
+                    Empresa
+                  </button>
+                </div>
+                <SharePieChart
+                  title={pieConfig.title}
+                  data={pieConfig.data}
+                  showLegend
+                />
+              </div>
             </div>
           </section>
 
@@ -245,7 +302,6 @@ function App() {
               data={dailyData}
               groups={allGroupsInData}
               title="Contribuição por Grupo"
-              dailyGoal={dailyGoal}
               comparisonData={comparisonDailyData}
               comparisonLabel={comparisonLabel}
             />
@@ -314,7 +370,7 @@ function App() {
 
           <GoalsDashboard
             data={companyGoalData}
-            totalRealizado={goalMetrics.realizado}
+            totalRealizado={goalMetrics.realizadoMes}
             totalMeta={goalMetrics.metaMensal}
             metaProporcional={goalMetrics.metaProporcional}
             diaAtual={goalMetrics.diaAtual}
@@ -325,14 +381,16 @@ function App() {
             dailyData={dailyData}
             allHistoricalData={allHistoricalDailyData}
             rawDataForSeasonality={rawDataForSeasonality}
+            getGoalForDate={getGoalForDate}
             realizadoHoje={goalMetrics.realizadoDia}
-            metaHoje={goalMetrics.metaDia}
+            metaHoje={goalMetrics.metaDiaAjustada}
             realizadoSemana={goalMetrics.realizadoSemana}
             metaSemana={goalMetrics.metaSemana}
-            diasNaSemana={7}
-            diaAtualSemana={goalMetrics.diasNaSemana}
+            esperadoSemanal={goalMetrics.esperadoSemanal}
             realizadoAno={goalMetrics.realizadoAno}
             metaAno={goalMetrics.metaAno}
+            metasMensais={goalMetrics.metasMensais}
+            mesAtual={goalMetrics.mesAtual}
           />
         </>
       )}

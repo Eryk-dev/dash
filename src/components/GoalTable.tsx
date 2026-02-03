@@ -15,12 +15,10 @@ interface CompanyGoalData {
 
 interface GoalTableProps {
   data: CompanyGoalData[];
-  diaAtual: number;
-  diasNoMes: number;
   onEditGoals: () => void;
 }
 
-export function GoalTable({ data, diaAtual, diasNoMes, onEditGoals }: GoalTableProps) {
+export function GoalTable({ data, onEditGoals }: GoalTableProps) {
   const [sortBy, setSortBy] = useState<'empresa' | 'percentual' | 'gap'>('percentual');
   const [sortDesc, setSortDesc] = useState(true);
 
@@ -48,8 +46,6 @@ export function GoalTable({ data, diaAtual, diasNoMes, onEditGoals }: GoalTableP
       setSortDesc(true);
     }
   };
-
-  const expectedPercent = (diaAtual / diasNoMes) * 100;
 
   return (
     <div className={styles.container}>
@@ -82,6 +78,9 @@ export function GoalTable({ data, diaAtual, diasNoMes, onEditGoals }: GoalTableP
             {sortedData.map((item) => {
               const isAhead = item.gap >= 0;
               const progressWidth = Math.min(item.percentualMeta, 100);
+              const expectedPercent = item.metaMensal > 0
+                ? (item.metaProporcional / item.metaMensal) * 100
+                : 0;
 
               return (
                 <tr key={item.empresa}>

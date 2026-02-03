@@ -8,7 +8,7 @@ interface UseSupabaseOptions {
 }
 
 export function useSupabaseFaturamento(options: UseSupabaseOptions = {}) {
-  const includeZero = options.includeZero ?? false;
+  const includeZero = options.includeZero ?? true;
   const [data, setData] = useState<FaturamentoRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +30,9 @@ export function useSupabaseFaturamento(options: UseSupabaseOptions = {}) {
       const records: FaturamentoRecord[] = (rows || [])
         .filter((row: FaturamentoRow) => {
           const value = Number(row.valor);
-          return Number.isFinite(value) && value >= 0;
+          const isValid = Number.isFinite(value) && value >= 0;
+          if (!isValid) return false;
+          return includeZero ? value >= 0 : value > 0;
         })
         .map((row: FaturamentoRow) => {
           const companyInfo = COMPANIES.find(c => c.empresa === row.empresa);
@@ -104,7 +106,7 @@ export function useSupabaseFaturamento(options: UseSupabaseOptions = {}) {
         );
 
         // Add new record when allowed
-        if (valor >= 0) {
+        if (valor > 0 || (includeZero && valor >= 0)) {
           return [...filtered, newRecord];
         }
         return filtered;
@@ -115,7 +117,7 @@ export function useSupabaseFaturamento(options: UseSupabaseOptions = {}) {
       console.error('Error upserting entry:', err);
       return { success: false, error: err instanceof Error ? err.message : 'Erro ao salvar' };
     }
-  }, [deleteEntry, includeZero]);
+  }, [includeZero]);
 
   // Get value for specific empresa/date
   const getValue = useCallback((empresa: string, date: string): number | null => {

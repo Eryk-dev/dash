@@ -8,7 +8,6 @@ import {
   ResponsiveContainer,
   Legend,
   LabelList,
-  ReferenceLine,
 } from 'recharts';
 import { formatDate } from '../utils/dataParser';
 import type { DailyDataPoint } from '../hooks/useFilters';
@@ -32,7 +31,6 @@ interface RevenueChartProps {
   data: DailyDataPoint[];
   companies?: string[];
   title?: string;
-  dailyGoal?: number;
   comparisonData?: DailyDataPoint[] | null;
   comparisonLabel?: string | null;
 }
@@ -66,15 +64,17 @@ function formatBRL(value: number): string {
   }).format(value);
 }
 
-export function RevenueChart({ data, companies = [], title = 'Faturamento Diário', dailyGoal, comparisonData, comparisonLabel }: RevenueChartProps) {
+export function RevenueChart({ data, companies = [], title = 'Faturamento Diário', comparisonData, comparisonLabel }: RevenueChartProps) {
   const isMobile = useIsMobile();
 
   const chartData = data.map((d, index) => {
     const point: Record<string, string | number | null> = {
-      date: formatDate(d.date),
+      x: index,
+      dateLabel: formatDate(d.date),
       total: d.total,
       // Align comparison by index (day 0 current = day 0 comparison)
       comparisonTotal: comparisonData && comparisonData[index] ? comparisonData[index].total : null,
+      goal: typeof d.goal === 'number' ? d.goal : null,
     };
 
     // Add company values
@@ -94,13 +94,19 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
 
   // Y-axis always starts at zero
   const yAxisMin = 0;
-  // Y-axis max = max between data and goal, with 10% margin
-  const maxWithGoal = dailyGoal && dailyGoal > 0
-    ? Math.max(maxDataValue, dailyGoal)
-    : maxDataValue;
+  // Y-axis max = max between data and max goal, with 10% margin
+  const maxGoalValue = data.length > 0 ? Math.max(...data.map((d) => d.goal || 0)) : 0;
+  const maxWithGoal = Math.max(maxDataValue, maxGoalValue);
   const yAxisMax = maxWithGoal > 0 ? maxWithGoal * 1.1 : undefined;
 
+  const hasGoalLine = data.some((d) => (d.goal || 0) > 0);
+
   const chartHeight = isMobile ? 220 : 280;
+  const maxIndex = Math.max(chartData.length - 1, 0);
+  const getLabelFromIndex = (value: number | string) => {
+    const idx = typeof value === 'string' ? Number(value) : value;
+    return chartData[idx]?.dateLabel || '';
+  };
 
   if (data.length === 0) {
     return (
@@ -122,13 +128,15 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
         <ResponsiveContainer width="100%" height={chartHeight}>
           <LineChart data={chartData} margin={{ top: 8, right: 48, left: 0, bottom: 0 }}>
             <XAxis
-              dataKey="date"
+              dataKey="x"
+              type="number"
+              domain={[0, maxIndex]}
               axisLine={false}
               tickLine={false}
               tick={{ fontSize: isMobile ? 10 : 11, fill: 'var(--ink-faint)' }}
               tickMargin={8}
               interval="preserveStartEnd"
-              scale="point"
+              tickFormatter={getLabelFromIndex}
               padding={{ left: 20, right: 20 }}
             />
             <YAxis
@@ -141,18 +149,23 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
               domain={[yAxisMin, yAxisMax || 'auto']}
             />
             <Tooltip
+              labelFormatter={getLabelFromIndex}
               content={({ active, payload, label }) => {
                 if (active && payload && payload.length) {
                   const currentTotal = payload.find((p) => p.dataKey === 'total')?.value as number | undefined;
                   const compTotal = payload.find((p) => p.dataKey === 'comparisonTotal')?.value as number | undefined;
+                  const goalEntry = payload.find((p) => p.dataKey === 'goal');
+                  const goalValue = goalEntry ? Number(goalEntry.value) : null;
                   const delta = currentTotal && compTotal ? ((currentTotal - compTotal) / compTotal) * 100 : null;
+                  const gap = currentTotal && goalValue !== null ? currentTotal - goalValue : null;
 
+                  const displayLabel = typeof label === 'string' ? label : getLabelFromIndex(label as number);
                   return (
                     <div className={styles.tooltip}>
-                      <span className={styles.tooltipDate}>{label}</span>
+                      <span className={styles.tooltipDate}>{displayLabel}</span>
                       <div className={styles.tooltipItems}>
                         {payload
-                          .filter((entry) => entry.dataKey !== 'comparisonTotal')
+                          .filter((entry) => entry.dataKey !== 'comparisonTotal' && entry.dataKey !== 'goal')
                           .map((entry, index) => (
                           <div key={index} className={styles.tooltipItem}>
                             <span
@@ -167,6 +180,30 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
                             </span>
                           </div>
                         ))}
+                        {goalValue !== null && (
+                          <div className={styles.tooltipItem}>
+                            <span
+                              className={styles.tooltipDot}
+                              style={{ background: '#23D8D3' }}
+                            />
+                            <span className={styles.tooltipLabel}>Meta</span>
+                            <span className={styles.tooltipValue}>
+                              {formatBRL(goalValue)}
+                            </span>
+                          </div>
+                        )}
+                        {gap !== null && (
+                          <div className={styles.tooltipItem}>
+                            <span
+                              className={styles.tooltipDot}
+                              style={{ background: gap >= 0 ? 'var(--success)' : 'var(--danger)' }}
+                            />
+                            <span className={styles.tooltipLabel}>Gap</span>
+                            <span className={styles.tooltipValue} style={{ color: gap >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                              {gap >= 0 ? '+' : ''}{formatBRL(gap)}
+                            </span>
+                          </div>
+                        )}
                         {compTotal != null && (
                           <div className={styles.tooltipItem}>
                             <span
@@ -205,20 +242,18 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
               />
             )}
 
-            {/* Daily goal reference line */}
-            {dailyGoal && dailyGoal > 0 && (
-              <ReferenceLine
-                y={dailyGoal}
+            {/* Use linear type for single/few points to avoid curve artifacts */}
+            {hasGoalLine && (
+              <Line
+                type={data.length <= 2 ? 'linear' : 'monotone'}
+                dataKey="goal"
+                name="Meta"
                 stroke="#23D8D3"
                 strokeDasharray="4 4"
                 strokeWidth={1.5}
-                label={{
-                  value: formatCompact(dailyGoal),
-                  position: 'right',
-                  fill: '#23D8D3',
-                  fontSize: 11,
-                  fontWeight: 500,
-                }}
+                dot={false}
+                activeDot={false}
+                connectNulls
               />
             )}
 

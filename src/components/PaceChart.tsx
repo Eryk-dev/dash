@@ -6,7 +6,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  ReferenceLine,
 } from 'recharts';
 import { formatBRL } from '../utils/dataParser';
 import type { DatePreset } from '../hooks/useFilters';
@@ -29,6 +28,8 @@ interface PaceChartProps {
   anoReferencia?: number;
   datePreset?: DatePreset;
   seasonalityFactors?: SeasonalityFactors;
+  getGoalForDate?: (date: Date) => number;
+  monthlyGoals?: number[];
 }
 
 function formatCompact(value: number): string {
@@ -46,6 +47,47 @@ function formatK(value: number): string {
 const WEEKDAY_NAMES = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 const MONTH_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
+interface PaceChartTooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    value?: number;
+    dataKey?: string | number;
+    color?: string;
+  }>;
+  label?: string | number;
+}
+
+function PaceChartTooltip({ active, payload, label }: PaceChartTooltipProps) {
+  if (!active || !payload?.length) return null;
+
+  const labels: Record<string, string> = {
+    realizado: 'Realizado',
+    meta: 'Meta',
+    projecao: 'Projeção',
+  };
+
+  return (
+    <div className={styles.tooltip}>
+      <div className={styles.tooltipHeader}>{label}</div>
+      {payload.map((entry) => {
+        const value = typeof entry.value === 'number' ? entry.value : undefined;
+        if (value === undefined) return null;
+        const key = typeof entry.dataKey === 'string' ? entry.dataKey : String(entry.dataKey);
+        return (
+          <div key={key} className={styles.tooltipRow}>
+            <span
+              className={styles.tooltipDot}
+              style={{ background: entry.color }}
+            />
+            <span>{labels[key] || key}:</span>
+            <span className={styles.tooltipValue}>{formatBRL(value)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function PaceChart({
   dailyData,
   allHistoricalData,
@@ -57,6 +99,8 @@ export function PaceChart({
   anoReferencia,
   datePreset = 'mtd',
   seasonalityFactors,
+  getGoalForDate,
+  monthlyGoals,
 }: PaceChartProps) {
   const referenceDate = useMemo(() => {
     if (dailyData.length > 0) {
@@ -99,6 +143,12 @@ export function PaceChart({
     const dataSource = allHistoricalData || dailyData;
     const toKey = (date: Date) => date.toISOString().split('T')[0];
     const metaDiaria = metaMensal / diasNoMes;
+    const goalForDate = (date: Date) => {
+      if (getGoalForDate) {
+        return getGoalForDate(new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0));
+      }
+      return metaDiaria;
+    };
 
     const dailyTotals = new Map<string, number>();
     dailyData.forEach((d) => {
@@ -114,7 +164,7 @@ export function PaceChart({
 
       return {
         mode: 'yesterday' as const,
-        meta: metaDiaria,
+        meta: goalForDate(targetDate),
         realizado: yesterdayTotal,
         projecao: yesterdayTotal,
         title: 'Ontem',
@@ -127,7 +177,12 @@ export function PaceChart({
       const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
       startOfWeek.setDate(referenceDate.getDate() - mondayOffset);
 
-      const metaSemana = metaDiaria * 7;
+      let metaSemana = 0;
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(startOfWeek);
+        date.setDate(startOfWeek.getDate() + i);
+        metaSemana += goalForDate(date);
+      }
 
       const dailyDataPoints: { label: string; realizado?: number; meta: number; projecao?: number }[] = [];
       for (let i = 0; i < 7; i++) {
@@ -139,7 +194,7 @@ export function PaceChart({
         dailyDataPoints.push({
           label: WEEKDAY_NAMES[i],
           realizado: isPast && actual !== undefined ? actual : undefined,
-          meta: metaDiaria,
+          meta: goalForDate(date),
           projecao: !isPast ? forecastModel.forecastForDate(date).p50 : undefined,
         });
       }
@@ -153,7 +208,7 @@ export function PaceChart({
         const key = toKey(date);
         const dayTotal = dailyTotals.get(key) || 0;
         cumRealizado += dayTotal;
-        cumMeta += metaDiaria;
+        cumMeta += goalForDate(date);
         const isPast = date <= referenceDate;
         cumulativeData.push({
           label: WEEKDAY_NAMES[i],
@@ -199,8 +254,13 @@ export function PaceChart({
     }
 
     if (datePreset === 'all') {
-      const metaAnual = metaAno || metaMensal * 12;
-      const metaMensalCalc = metaAnual / 12;
+      const fallbackMonthly = metaAno > 0 ? metaAno / 12 : metaMensal;
+      const resolvedMonthlyGoals = monthlyGoals && monthlyGoals.length === 12
+        ? monthlyGoals
+        : Array.from({ length: 12 }, () => fallbackMonthly);
+      const metaAnual = metaAno > 0
+        ? metaAno
+        : resolvedMonthlyGoals.reduce((sum, value) => sum + value, 0);
       const currentMonth = referenceDate.getMonth();
 
       const monthlyTotals = new Map<number, number>();
@@ -229,7 +289,7 @@ export function PaceChart({
         dailyChartData.push({
           label: MONTH_NAMES[m],
           realizado: isPast || isCurrent ? actual : undefined,
-          meta: metaMensalCalc,
+          meta: resolvedMonthlyGoals[m] || 0,
           projecao: m >= currentMonth ? actual + monthlyForecast[m] : undefined,
         });
       }
@@ -240,7 +300,7 @@ export function PaceChart({
       for (let m = 0; m < 12; m++) {
         const monthTotal = monthlyTotals.get(m) || 0;
         cumRealizado += monthTotal;
-        cumMeta += metaMensalCalc;
+        cumMeta += resolvedMonthlyGoals[m] || 0;
         cumulativeData.push({
           label: MONTH_NAMES[m],
           realizado: m <= currentMonth ? cumRealizado : undefined,
@@ -261,7 +321,7 @@ export function PaceChart({
         mode: 'dual' as const,
         daily: {
           data: dailyChartData,
-          meta: metaMensalCalc,
+          meta: resolvedMonthlyGoals[currentMonth] || 0,
           title: 'Ritmo Mensal do Ano',
           xAxisKey: 'label',
           xAxisFormatter: (v: string) => v,
@@ -287,19 +347,21 @@ export function PaceChart({
       dailyChartData.push({
         dia,
         realizado: isPast && actual !== undefined ? actual : undefined,
-        meta: metaDiaria,
+        meta: goalForDate(date),
         projecao: !isPast ? forecastModel.forecastForDate(date).p50 : undefined,
       });
     }
 
     const cumulativeData: { dia: number; realizado?: number; meta: number; projecao?: number }[] = [];
     let cumulative = 0;
+    let cumulativeMeta = 0;
     for (let dia = 1; dia <= diasNoMes; dia++) {
       const date = new Date(refYear, refMonth - 1, dia, 12, 0, 0);
       const key = toKey(date);
       const dayValue = dailyTotals.get(key) || 0;
       cumulative += dayValue;
-      const metaCum = metaDiaria * dia;
+      cumulativeMeta += goalForDate(date);
+      const metaCum = cumulativeMeta;
       if (dia <= diaAtual) {
         cumulativeData.push({ dia, realizado: cumulative, meta: metaCum });
       } else {
@@ -344,7 +406,21 @@ export function PaceChart({
         },
       },
     };
-  }, [dailyData, allHistoricalData, datePreset, metaMensal, metaAno, diasNoMes, diaAtual, refMonth, refYear, referenceDate, forecastModel]);
+  }, [
+    dailyData,
+    allHistoricalData,
+    datePreset,
+    metaMensal,
+    metaAno,
+    monthlyGoals,
+    diasNoMes,
+    diaAtual,
+    refMonth,
+    refYear,
+    referenceDate,
+    forecastModel,
+    getGoalForDate,
+  ]);
 
   const summary = chartState.mode === 'yesterday'
     ? { meta: chartState.meta, realizado: chartState.realizado, projecao: chartState.projecao, title: chartState.title }
@@ -392,36 +468,11 @@ export function PaceChart({
     );
   }
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (!active || !payload?.length) return null;
-
-    return (
-      <div className={styles.tooltip}>
-        <div className={styles.tooltipHeader}>{label}</div>
-        {payload.map((entry: any) => {
-          if (entry.value === undefined || entry.value === null) return null;
-          const labels: Record<string, string> = {
-            realizado: 'Realizado',
-            meta: 'Meta',
-            projecao: 'Projeção',
-          };
-          return (
-            <div key={entry.dataKey} className={styles.tooltipRow}>
-              <span
-                className={styles.tooltipDot}
-                style={{ background: entry.color }}
-              />
-              <span>{labels[entry.dataKey] || entry.dataKey}:</span>
-              <span className={styles.tooltipValue}>{formatBRL(entry.value)}</span>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
   const { daily, cumulative } = chartState;
   const dailyMetaLabel = datePreset === 'all' ? 'Meta mensal' : 'Meta diária';
+  const dailyMetaLabelValue = datePreset === 'all'
+    ? daily.meta
+    : (metaMensal / diasNoMes);
 
   return (
     <div className={styles.container}>
@@ -429,7 +480,7 @@ export function PaceChart({
         <div className={styles.sectionHeader}>
           <div className={styles.sectionTitle}>{daily.title}</div>
           <div className={styles.sectionMeta}>
-            {dailyMetaLabel}: {formatCompact(daily.meta)}
+            {dailyMetaLabel}: {formatCompact(dailyMetaLabelValue)}
           </div>
         </div>
         <div className={styles.chartWrapperDaily}>
@@ -454,22 +505,16 @@ export function PaceChart({
                 tickMargin={8}
                 width={48}
               />
-              <Tooltip content={<CustomTooltip />} />
-              {daily.meta > 0 && (
-                <ReferenceLine
-                  y={daily.meta}
-                  stroke="#23D8D3"
-                  strokeDasharray="4 4"
-                  strokeWidth={1.5}
-                  label={{
-                    value: formatCompact(daily.meta),
-                    position: 'right',
-                    fill: '#23D8D3',
-                    fontSize: 11,
-                    fontWeight: 500,
-                  }}
-                />
-              )}
+              <Tooltip content={<PaceChartTooltip />} />
+              <Line
+                type="monotone"
+                dataKey="meta"
+                stroke="#23D8D3"
+                strokeDasharray="4 4"
+                strokeWidth={1.5}
+                dot={false}
+                connectNulls
+              />
               <Line
                 type="monotone"
                 dataKey="projecao"
@@ -557,7 +602,7 @@ export function PaceChart({
                 tickMargin={8}
                 width={48}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<PaceChartTooltip />} />
               <Line
                 type="monotone"
                 dataKey="meta"
