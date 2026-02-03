@@ -4,6 +4,7 @@ import styles from './GoalSummary.module.css';
 
 interface GoalSummaryProps {
   realizado: number;
+  realizadoMes: number;
   meta: number;
   metaProporcional: number;
   diaAtual: number;
@@ -73,6 +74,7 @@ function ProgressBar({ label, realizado, meta, expected, expectedLabel }: Progre
 
 export function GoalSummary({
   realizado,
+  realizadoMes,
   meta,
   metaProporcional,
   diaAtual,
@@ -133,7 +135,7 @@ export function GoalSummary({
           <div className={styles.divider} />
           <ProgressBar
             label="Meta Mensal"
-            realizado={realizado}
+            realizado={realizadoMes}
             meta={meta}
             expected={metaProporcional}
             expectedLabel={`vs esperado (dia ${diaAtual})`}
@@ -146,7 +148,7 @@ export function GoalSummary({
         <>
           <ProgressBar
             label={datePreset === 'all' ? "Meta do Período" : "Meta Mensal"}
-            realizado={realizado}
+            realizado={datePreset === 'all' ? realizado : realizadoMes}
             meta={meta}
             expected={datePreset === 'all' ? undefined : metaProporcional}
             expectedLabel={datePreset === 'all' ? undefined : `vs esperado (dia ${diaAtual})`}

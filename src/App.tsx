@@ -205,6 +205,7 @@ function App() {
             </div>
             <GoalSummary
               realizado={goalMetrics.realizado}
+              realizadoMes={goalMetrics.realizadoMes}
               meta={goalMetrics.metaMensal}
               metaProporcional={goalMetrics.metaProporcional}
               diaAtual={goalMetrics.diaAtual}

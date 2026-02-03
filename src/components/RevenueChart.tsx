@@ -91,16 +91,14 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
 
   // Calculate Y-axis domain
   const maxDataValue = data.length > 0 ? Math.max(...data.map((d) => d.total)) : 0;
-  const minDataValue = data.length > 0 ? Math.min(...data.map((d) => d.total)) : 0;
 
-  // Always expand Y-axis to include dailyGoal if it exists
-  const shouldExpandForGoal = dailyGoal && dailyGoal > 0 && dailyGoal > maxDataValue;
-
-  // Calculate Y domain - don't start at 0 if data range is small relative to values
-  const yAxisMin = minDataValue > 0 && minDataValue > maxDataValue * 0.3
-    ? Math.floor(minDataValue * 0.9 / 1000) * 1000
-    : 0;
-  const yAxisMax = shouldExpandForGoal ? dailyGoal * 1.1 : undefined;
+  // Y-axis always starts at zero
+  const yAxisMin = 0;
+  // Y-axis max = max between data and goal, with 10% margin
+  const maxWithGoal = dailyGoal && dailyGoal > 0
+    ? Math.max(maxDataValue, dailyGoal)
+    : maxDataValue;
+  const yAxisMax = maxWithGoal > 0 ? maxWithGoal * 1.1 : undefined;
 
   const chartHeight = isMobile ? 220 : 280;
 

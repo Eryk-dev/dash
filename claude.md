@@ -4,7 +4,59 @@
 
 Dashboard de acompanhamento de faturamento para múltiplas empresas organizadas em grupos e segmentos. Permite visualizar receitas, comparar com metas, analisar tendências e entrada manual de dados.
 
-**Stack:** React 19 + TypeScript + Vite + Recharts + date-fns + Lucide Icons
+**Stack:** React 19 + TypeScript + Vite + Recharts + date-fns + Lucide Icons + Supabase
+
+---
+
+## Supabase
+
+**Projeto:** 141air
+**Project ID:** `iezxmhrjndzuckjcxihd`
+**Região:** us-east-2
+**Dashboard:** https://supabase.com/dashboard/project/iezxmhrjndzuckjcxihd
+
+### Tabela `faturamento`
+Armazena dados diários de faturamento por empresa.
+
+```sql
+CREATE TABLE faturamento (
+  id BIGSERIAL PRIMARY KEY,
+  empresa TEXT NOT NULL,
+  data DATE NOT NULL,
+  valor NUMERIC DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(empresa, data)
+);
+```
+
+**Índices:**
+- `idx_faturamento_data` - busca por data
+- `idx_faturamento_empresa` - busca por empresa
+- `faturamento_empresa_data_key` - constraint unique
+
+**RLS:** Habilitado
+
+### Hook: useSupabaseFaturamento
+**Arquivo:** `src/hooks/useSupabaseFaturamento.ts`
+
+```typescript
+{
+  data: FaturamentoRecord[];
+  loading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+  upsertEntry: (empresa, date, valor) => Promise<Result>;
+  deleteEntry: (empresa, date) => Promise<Result>;
+  getValue: (empresa, date) => number | null;
+}
+```
+
+**Funcionalidades:**
+- Fetch inicial de todos os dados
+- Realtime subscription para mudanças
+- Upsert com `ON CONFLICT (empresa, data)`
+- Integração com COMPANIES para grupo/segmento
 
 ---
 
@@ -15,8 +67,11 @@ src/
 ├── App.tsx                    # Componente principal com 3 views
 ├── types.ts                   # Interfaces TypeScript
 ├── main.tsx                   # Entry point
+├── lib/
+│   └── supabase.ts            # Cliente Supabase
 ├── hooks/
-│   ├── useGoogleSheets.ts     # Fetch de dados CSV do Google Sheets
+│   ├── useSupabaseFaturamento.ts  # Dados do Supabase (principal)
+│   ├── useGoogleSheets.ts     # Fetch de dados CSV (legado)
 │   ├── useLocalEntries.ts     # Merge dados locais (localStorage)
 │   ├── useFilters.ts          # Filtros, KPIs, métricas de metas
 │   └── useGoals.ts            # Gestão de metas anuais
@@ -391,3 +446,55 @@ VITE_GOOGLE_SHEETS_URL=https://docs.google.com/spreadsheets/.../pub?output=csv
 3. **Comparação:** Alinha por índice (dia 0 = dia 0), não por data
 4. **Metas:** Proporcional = (metaMensal / diasNoMes) × diaAtual
 5. **Status:** Tolerância de ±5% da meta proporcional
+
+---
+
+## Lógica de Indicadores de Meta (D-1)
+
+Todos os indicadores de "onde deveríamos estar" usam **D-1 (ontem)** como referência, pois o faturamento só pode ser fechado no dia seguinte (D+1).
+
+### Resumo dos Indicadores
+
+| Indicador | Meta | Esperado | Realizado |
+|-----------|------|----------|-----------|
+| **Diário** | 1 dia | - | D-1 |
+| **Semanal** | 7 dias | dias até D-1 | semana até D-1 |
+| **Mensal** | mês inteiro | dia D-1 | mês até D-1 |
+| **Anual** | ano inteiro | mês D-1 | ano até D-1 |
+
+### Variáveis de Referência (useFilters.ts)
+```typescript
+const yesterday = new Date(today);
+yesterday.setDate(yesterday.getDate() - 1);
+
+const diaAtual = yesterday.getDate();        // Dia de D-1
+const refMonth = yesterday.getMonth() + 1;   // Mês de D-1
+const refYear = yesterday.getFullYear();     // Ano de D-1
+const diasNaSemana = /* dias desde segunda até D-1 */;
+```
+
+### Meta Semanal
+- `metaSemana = metaDia × 7` (semana completa)
+- `esperado = (metaSemana / 7) × diasNaSemana`
+- `realizadoSemana` = soma de segunda até D-1
+
+### Meta por Segmento
+Quando há filtro de segmento (sem filtro de empresas/grupos), a meta é proporcionalizada:
+```typescript
+segmentProportion = receita_segmento / receita_total;
+metaAjustada = metaBase × segmentProportion;
+```
+
+---
+
+## Gráfico RevenueChart
+
+### Eixo Y
+- Sempre começa do zero
+- Limite superior = `max(faturamento, metaDiária) × 1.1`
+
+```typescript
+const yAxisMin = 0;
+const maxWithGoal = dailyGoal > 0 ? Math.max(maxDataValue, dailyGoal) : maxDataValue;
+const yAxisMax = maxWithGoal > 0 ? maxWithGoal * 1.1 : undefined;
+```
