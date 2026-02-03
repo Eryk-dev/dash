@@ -101,7 +101,7 @@ export function GoalSummary({
 
   return (
     <div className={styles.container}>
-      {/* Ontem: Diária → Semana */}
+      {/* Ontem: Diária → Semanal */}
       {isYesterday && (
         <>
           <ProgressBar
@@ -111,7 +111,7 @@ export function GoalSummary({
           />
           <div className={styles.divider} />
           <ProgressBar
-            label="Meta da Semana"
+            label="Meta Semanal"
             realizado={realizadoSemana}
             meta={metaSemana}
             expected={(metaSemana / 7) * diasNaSemana}
@@ -120,11 +120,11 @@ export function GoalSummary({
         </>
       )}
 
-      {/* Semana: Semana → Mês */}
+      {/* Semana: Semanal → Mensal */}
       {isWeek && (
         <>
           <ProgressBar
-            label="Meta da Semana"
+            label="Meta Semanal"
             realizado={realizadoSemana}
             meta={metaSemana}
             expected={(metaSemana / 7) * diasNaSemana}
@@ -132,7 +132,7 @@ export function GoalSummary({
           />
           <div className={styles.divider} />
           <ProgressBar
-            label="Meta do Mês"
+            label="Meta Mensal"
             realizado={realizado}
             meta={meta}
             expected={metaProporcional}
@@ -141,19 +141,19 @@ export function GoalSummary({
         </>
       )}
 
-      {/* Mês/Tudo: Mês → Ano */}
+      {/* Mensal/Tudo: Mensal/Período → Anual */}
       {isMonthOrAll && (
         <>
           <ProgressBar
-            label="Meta do Mês"
+            label={datePreset === 'all' ? "Meta do Período" : "Meta Mensal"}
             realizado={realizado}
             meta={meta}
-            expected={metaProporcional}
-            expectedLabel={`vs esperado (dia ${diaAtual})`}
+            expected={datePreset === 'all' ? undefined : metaProporcional}
+            expectedLabel={datePreset === 'all' ? undefined : `vs esperado (dia ${diaAtual})`}
           />
           <div className={styles.divider} />
           <ProgressBar
-            label="Meta do Ano"
+            label="Meta Anual"
             realizado={realizadoAno}
             meta={metaAno}
             expected={metaAnoProporcional}

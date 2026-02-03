@@ -126,14 +126,14 @@ export const MONTH_FULL_NAMES = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ];
 
-// Backward compatibility - interface antiga
+// Interface para meta de um mês específico
 export interface CompanyGoal {
   empresa: string;
   grupo: string;
   metaMensal: number;
 }
 
-// Converter para formato antigo (para um mês específico)
+// Converter para formato de meta por período (para um mês específico)
 export function toMonthlyGoals(goals: CompanyYearlyGoal[], month: number): CompanyGoal[] {
   return goals.map(g => ({
     empresa: g.empresa,

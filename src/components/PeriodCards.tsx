@@ -1,11 +1,13 @@
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { DatePreset } from '../hooks/useFilters';
+import type { CoverageMetrics } from '../types';
 import styles from './PeriodCards.module.css';
 
 interface PeriodData {
   realizado: number;
   meta: number;
   metaProporcional: number;
+  coverage?: CoverageMetrics;
 }
 
 interface PeriodCardsProps {
@@ -34,11 +36,12 @@ interface CardProps {
   realizado: number;
   meta: number;
   metaProporcional: number;
+  coverage?: CoverageMetrics;
   showPercent?: boolean;
   isActive?: boolean;
 }
 
-function Card({ label, realizado, meta, metaProporcional, showPercent, isActive }: CardProps) {
+function Card({ label, realizado, meta, metaProporcional, coverage, showPercent, isActive }: CardProps) {
   const gap = realizado - metaProporcional;
   const status = getGapStatus(gap, metaProporcional);
   const percent = meta > 0 ? Math.round((realizado / meta) * 100) : 0;
@@ -73,6 +76,14 @@ function Card({ label, realizado, meta, metaProporcional, showPercent, isActive 
           <span className={styles.cardPercent}>{percent}%</span>
         )}
       </div>
+      {coverage && coverage.expected > 0 && (
+        <div className={styles.cardCoverage}>
+          <span className={styles.cardCoverageLabel}>Cobertura</span>
+          <span className={styles.cardCoverageValue}>
+            {coverage.observed}/{coverage.expected} ({Math.round(coverage.percent * 100)}%)
+          </span>
+        </div>
+      )}
     </div>
   );
 }

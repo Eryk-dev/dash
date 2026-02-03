@@ -3,7 +3,12 @@ import { supabase, type FaturamentoRow } from '../lib/supabase';
 import type { FaturamentoRecord } from '../types';
 import { COMPANIES } from '../data/fallbackData';
 
-export function useSupabaseFaturamento() {
+interface UseSupabaseOptions {
+  includeZero?: boolean;
+}
+
+export function useSupabaseFaturamento(options: UseSupabaseOptions = {}) {
+  const includeZero = options.includeZero ?? false;
   const [data, setData] = useState<FaturamentoRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +28,10 @@ export function useSupabaseFaturamento() {
 
       // Convert to FaturamentoRecord format
       const records: FaturamentoRecord[] = (rows || [])
-        .filter((row: FaturamentoRow) => row.valor > 0)
+        .filter((row: FaturamentoRow) => {
+          const value = Number(row.valor);
+          return Number.isFinite(value) && value >= 0;
+        })
         .map((row: FaturamentoRow) => {
           const companyInfo = COMPANIES.find(c => c.empresa === row.empresa);
           return {
@@ -41,6 +49,29 @@ export function useSupabaseFaturamento() {
       setError(err instanceof Error ? err.message : 'Erro ao carregar dados');
     } finally {
       setLoading(false);
+    }
+  }, [includeZero]);
+
+  // Delete an entry
+  const deleteEntry = useCallback(async (empresa: string, date: string) => {
+    try {
+      const { error: deleteError } = await supabase
+        .from('faturamento')
+        .delete()
+        .eq('empresa', empresa)
+        .eq('data', date);
+
+      if (deleteError) throw deleteError;
+
+      // Update local state
+      setData(prev => prev.filter(
+        r => !(r.empresa === empresa && r.data.toISOString().split('T')[0] === date)
+      ));
+
+      return { success: true };
+    } catch (err) {
+      console.error('Error deleting entry:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Erro ao deletar' };
     }
   }, []);
 
@@ -72,8 +103,8 @@ export function useSupabaseFaturamento() {
           r => !(r.empresa === empresa && r.data.toISOString().split('T')[0] === date)
         );
 
-        // Add new record if valor > 0
-        if (valor > 0) {
+        // Add new record when allowed
+        if (valor >= 0) {
           return [...filtered, newRecord];
         }
         return filtered;
@@ -84,30 +115,7 @@ export function useSupabaseFaturamento() {
       console.error('Error upserting entry:', err);
       return { success: false, error: err instanceof Error ? err.message : 'Erro ao salvar' };
     }
-  }, []);
-
-  // Delete an entry
-  const deleteEntry = useCallback(async (empresa: string, date: string) => {
-    try {
-      const { error: deleteError } = await supabase
-        .from('faturamento')
-        .delete()
-        .eq('empresa', empresa)
-        .eq('data', date);
-
-      if (deleteError) throw deleteError;
-
-      // Update local state
-      setData(prev => prev.filter(
-        r => !(r.empresa === empresa && r.data.toISOString().split('T')[0] === date)
-      ));
-
-      return { success: true };
-    } catch (err) {
-      console.error('Error deleting entry:', err);
-      return { success: false, error: err instanceof Error ? err.message : 'Erro ao deletar' };
-    }
-  }, []);
+  }, [deleteEntry, includeZero]);
 
   // Get value for specific empresa/date
   const getValue = useCallback((empresa: string, date: string): number | null => {

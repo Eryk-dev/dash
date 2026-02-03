@@ -4,7 +4,13 @@ import { formatBRL } from '../utils/dataParser';
 import { PeriodCards } from './PeriodCards';
 import { PaceChart } from './PaceChart';
 import { GroupRanking } from './GroupRanking';
-import type { Filters } from '../types';
+import {
+  calculateCompanySeasonality,
+  getSeasonalityForEntity,
+  type SeasonalityHierarchy,
+  type RawSeasonalityRecord,
+} from '../utils/projectionEngine';
+import type { CoverageMetrics, Filters } from '../types';
 import type { DatePreset } from '../hooks/useFilters';
 import styles from './GoalsDashboard.module.css';
 
@@ -21,6 +27,8 @@ interface CompanyGoalData {
 interface DailyDataPoint {
   date: Date;
   total: number;
+  empresa?: string;
+  grupo?: string;
 }
 
 interface GoalsDashboardProps {
@@ -30,10 +38,18 @@ interface GoalsDashboardProps {
   metaProporcional: number;
   diaAtual: number;
   diasNoMes: number;
+  coverage?: {
+    dia: CoverageMetrics;
+    semana: CoverageMetrics;
+    mes: CoverageMetrics;
+    ano: CoverageMetrics;
+  };
   filters?: Filters;
   datePreset?: DatePreset;
   // New props for charts
   dailyData?: DailyDataPoint[];
+  allHistoricalData?: DailyDataPoint[]; // All historical data for projections
+  rawDataForSeasonality?: RawSeasonalityRecord[]; // Raw data with empresa/grupo for seasonality
   realizadoHoje?: number;
   metaHoje?: number;
   realizadoSemana?: number;
@@ -60,9 +76,12 @@ export function GoalsDashboard({
   metaProporcional,
   diaAtual,
   diasNoMes,
+  coverage,
   filters,
   datePreset = 'mtd',
   dailyData = [],
+  allHistoricalData,
+  rawDataForSeasonality,
   realizadoHoje = 0,
   metaHoje = 0,
   realizadoSemana = 0,
@@ -131,24 +150,28 @@ export function GoalsDashboard({
         realizado: realizadoHoje,
         meta: metaDiaria,
         metaProporcional: metaPropHoje,
+        coverage: coverage?.dia,
       },
       semana: {
         realizado: realizadoSemana,
         meta: metaSemanalCalc,
         metaProporcional: metaPropSemana,
+        coverage: coverage?.semana,
       },
       mes: {
         realizado: displayRealizado,
         meta: displayMeta,
         metaProporcional: displayMetaProp,
+        coverage: coverage?.mes,
       },
       ano: metaAno > 0 ? {
         realizado: realizadoAno,
         meta: metaAno,
         metaProporcional: metaAno * (new Date().getMonth() + 1) / 12,
+        coverage: coverage?.ano,
       } : undefined,
     };
-  }, [displayRealizado, displayMeta, displayMetaProp, diasNoMes, realizadoHoje, metaHoje, realizadoSemana, metaSemana, diasNaSemana, diaAtualSemana, realizadoAno, metaAno]);
+  }, [displayRealizado, displayMeta, displayMetaProp, diasNoMes, realizadoHoje, metaHoje, realizadoSemana, metaSemana, diasNaSemana, diaAtualSemana, realizadoAno, metaAno, coverage]);
 
   const toggleGroup = (grupo: string) => {
     setExpandedGroups(prev => {
@@ -172,6 +195,34 @@ export function GoalsDashboard({
     })).sort((a, b) => b.realizado - a.realizado);
   }, [groupTotals, filteredData]);
 
+  // Determine selected entity for seasonality
+  const selectedEntity = useMemo(() => {
+    if (filters?.empresas.length === 1) {
+      return { empresa: filters.empresas[0], grupo: undefined };
+    }
+    if (filters?.grupos.length === 1) {
+      const grupo = filters.grupos[0];
+      return { empresa: undefined, grupo };
+    }
+    return { empresa: undefined, grupo: undefined };
+  }, [filters]);
+
+  // Calculate seasonality hierarchy from raw data (with empresa/grupo info)
+  const seasonalityHierarchy = useMemo((): SeasonalityHierarchy | null => {
+    if (!rawDataForSeasonality || rawDataForSeasonality.length === 0) return null;
+    return calculateCompanySeasonality(rawDataForSeasonality);
+  }, [rawDataForSeasonality]);
+
+  // Get seasonality for selected entity
+  const entitySeasonality = useMemo(() => {
+    if (!seasonalityHierarchy) return undefined;
+    return getSeasonalityForEntity(
+      seasonalityHierarchy,
+      selectedEntity.empresa,
+      selectedEntity.grupo
+    );
+  }, [seasonalityHierarchy, selectedEntity]);
+
   return (
     <div className={styles.container}>
       {/* Period Cards */}
@@ -190,9 +241,19 @@ export function GoalsDashboard({
         <div className={styles.chartMain}>
           <PaceChart
             dailyData={dailyData}
+            allHistoricalData={allHistoricalData}
             metaMensal={displayMeta}
+            metaAno={metaAno}
             diasNoMes={diasNoMes}
             diaAtual={diaAtual}
+            datePreset={datePreset}
+            mesReferencia={dailyData.length > 0
+              ? dailyData.reduce((latest, d) => d.date > latest ? d.date : latest, dailyData[0].date).getMonth() + 1
+              : new Date().getMonth() + 1}
+            anoReferencia={dailyData.length > 0
+              ? dailyData.reduce((latest, d) => d.date > latest ? d.date : latest, dailyData[0].date).getFullYear()
+              : new Date().getFullYear()}
+            seasonalityFactors={entitySeasonality}
           />
         </div>
         <div className={styles.chartSide}>

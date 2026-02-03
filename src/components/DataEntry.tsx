@@ -5,14 +5,15 @@ import type { CompanyYearlyGoal } from '../data/goals';
 import { formatBRL } from '../utils/dataParser';
 import styles from './DataEntry.module.css';
 
-function toDateInputValue(date: Date): string {
-  return date.toISOString().split('T')[0];
+function toMonthInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
 }
-
 interface DataEntryProps {
   data: FaturamentoRecord[];
   goals: CompanyYearlyGoal[];
-  onSave: (empresa: string, date: string, valor: number) => Promise<{ success: boolean; error?: string }>;
+  onSave: (empresa: string, date: string, valor: number | null) => Promise<{ success: boolean; error?: string }>;
 }
 
 interface DayColumn {
@@ -46,75 +47,22 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
     return d;
   }, []);
 
-  const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, 2=Tue...
-  const isMonday = dayOfWeek === 1;
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
 
-  // Custom date range state
-  const [useCustomRange, setUseCustomRange] = useState(false);
-  const [customStart, setCustomStart] = useState<Date | null>(null);
-  const [customEnd, setCustomEnd] = useState<Date | null>(null);
+  const monthLabel = useMemo(() => {
+    return selectedMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  }, [selectedMonth]);
 
-  // Calculate default days based on day of week
-  const defaultDays = useMemo((): DayColumn[] => {
+  const daysToShow = useMemo((): DayColumn[] => {
     const days: DayColumn[] = [];
+    const start = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), 1);
+    const endOfMonth = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0);
+    const isCurrentMonth = selectedMonth.getFullYear() === today.getFullYear()
+      && selectedMonth.getMonth() === today.getMonth();
+    const end = isCurrentMonth ? today : endOfMonth;
 
-    if (isMonday) {
-      // Monday: show Friday, Saturday, Sunday
-      for (let i = 3; i >= 1; i--) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        days.push({
-          date: d,
-          label: getDayLabel(d, today),
-          shortLabel: getShortLabel(d),
-          isToday: false,
-          isYesterday: i === 1,
-        });
-      }
-    } else if (dayOfWeek === 0) {
-      // Sunday: show just Saturday
-      const d = new Date(today);
-      d.setDate(d.getDate() - 1);
-      days.push({
-        date: d,
-        label: 'Ontem',
-        shortLabel: getShortLabel(d),
-        isToday: false,
-        isYesterday: true,
-      });
-    } else {
-      // Tuesday-Saturday: show Monday through yesterday
-      const daysFromMonday = dayOfWeek - 1;
-      for (let i = daysFromMonday; i >= 1; i--) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        days.push({
-          date: d,
-          label: getDayLabel(d, today),
-          shortLabel: getShortLabel(d),
-          isToday: false,
-          isYesterday: i === 1,
-        });
-      }
-    }
-
-    return days;
-  }, [today, dayOfWeek, isMonday]);
-
-  // Calculate custom days from range (max 90 days)
-  const customDays = useMemo((): DayColumn[] => {
-    if (!customStart || !customEnd) return [];
-
-    const days: DayColumn[] = [];
-    const current = new Date(customStart);
-    current.setHours(0, 0, 0, 0);
-    const end = new Date(customEnd);
-    end.setHours(0, 0, 0, 0);
-
-    const maxDays = 90;
-    let count = 0;
-
-    while (current <= end && count < maxDays) {
+    const current = new Date(start);
+    while (current <= end) {
       days.push({
         date: new Date(current),
         label: getDayLabel(current, today),
@@ -123,139 +71,22 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
         isYesterday: Math.round((today.getTime() - current.getTime()) / (1000 * 60 * 60 * 24)) === 1,
       });
       current.setDate(current.getDate() + 1);
-      count++;
     }
 
     return days;
-  }, [customStart, customEnd, today]);
+  }, [selectedMonth, today]);
 
-  // Use custom or default days
-  const daysToShow = useCustomRange && customDays.length > 0 ? customDays : defaultDays;
-
-  const handleCustomStartChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const date = e.target.value ? new Date(e.target.value + 'T00:00:00') : null;
-    setCustomStart(date);
-    if (date && !customEnd) {
-      setCustomEnd(date);
-    }
-    setUseCustomRange(true);
+  const handleMonthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.value) return;
+    const [year, month] = e.target.value.split('-').map(Number);
+    if (!year || !month) return;
+    setSelectedMonth(new Date(year, month - 1, 1));
   };
 
-  const handleCustomEndChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const date = e.target.value ? new Date(e.target.value + 'T00:00:00') : null;
-    setCustomEnd(date);
-    setUseCustomRange(true);
-  };
-
-  const resetToDefault = () => {
-    setUseCustomRange(false);
-    setCustomStart(null);
-    setCustomEnd(null);
-  };
-
-  // Quick presets
-  const setPreset = (preset: 'ontem' | 'semana' | 'mes') => {
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    if (preset === 'ontem') {
-      setCustomStart(yesterday);
-      setCustomEnd(yesterday);
-    } else if (preset === 'semana') {
-      // Always show full current week: Monday to Sunday
-      const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, ...
-      const monday = new Date(today);
-      const daysSinceMonday = (dayOfWeek + 6) % 7; // Convert to Mon=0, Sun=6
-      monday.setDate(monday.getDate() - daysSinceMonday);
-
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-
-      setCustomStart(monday);
-      setCustomEnd(sunday);
-    } else if (preset === 'mes') {
-      // Full month: first day to last day
-      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      setCustomStart(firstDay);
-      setCustomEnd(lastDay);
-    }
-    setUseCustomRange(true);
-  };
-
-  // Navigate to previous/next period based on active preset
-  const navigatePeriod = (direction: 'prev' | 'next') => {
-    if (!customStart || !customEnd) return;
-
+  const navigateMonth = (direction: 'prev' | 'next') => {
     const offset = direction === 'prev' ? -1 : 1;
-
-    if (activePreset === 'ontem') {
-      // Move by 1 day
-      const newDate = new Date(customStart);
-      newDate.setDate(newDate.getDate() + offset);
-      setCustomStart(newDate);
-      setCustomEnd(new Date(newDate));
-    } else if (activePreset === 'semana') {
-      // Move by 1 week - show full week (Mon-Sun)
-      const newMonday = new Date(customStart);
-      newMonday.setDate(newMonday.getDate() + (offset * 7));
-      const newSunday = new Date(newMonday);
-      newSunday.setDate(newMonday.getDate() + 6);
-      setCustomStart(newMonday);
-      setCustomEnd(newSunday);
-    } else if (activePreset === 'mes') {
-      // Move by 1 month - show full month
-      const newStart = new Date(customStart);
-      newStart.setMonth(newStart.getMonth() + offset);
-      newStart.setDate(1);
-      const newEnd = new Date(newStart.getFullYear(), newStart.getMonth() + 1, 0);
-      setCustomStart(newStart);
-      setCustomEnd(newEnd);
-    } else {
-      // Custom range - move by the number of days in the range
-      const start = new Date(customStart);
-      const end = new Date(customEnd);
-      const daysDiff = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      const dayOffset = offset * daysDiff;
-      start.setDate(start.getDate() + dayOffset);
-      end.setDate(end.getDate() + dayOffset);
-      setCustomStart(start);
-      setCustomEnd(end);
-    }
-
-    setUseCustomRange(true);
+    setSelectedMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
   };
-
-  // Determine active preset
-  const activePreset = useMemo((): 'ontem' | 'semana' | 'mes' | null => {
-    if (!useCustomRange || !customStart || !customEnd) return null;
-
-    const startDate = new Date(customStart);
-    const endDate = new Date(customEnd);
-    const daysDiff = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-
-    // Check mes FIRST - starts on 1st of month (regardless of how many days)
-    const isFirstDay = startDate.getDate() === 1;
-    if (isFirstDay) {
-      const lastDayOfMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate();
-      const isLastDay = endDate.getDate() === lastDayOfMonth;
-      // Full month or current month (1st to any day in same month)
-      if ((isLastDay && startDate.getMonth() === endDate.getMonth()) ||
-        startDate.getMonth() === endDate.getMonth()) {
-        return 'mes';
-      }
-    }
-
-    // Check semana - starts on Monday (day 1)
-    const startDay = startDate.getDay();
-    const endDay = endDate.getDay();
-    if (startDay === 1 && (endDay === 0 || daysDiff <= 6)) return 'semana';
-
-    // Check ontem - single day (only if not caught by above)
-    if (daysDiff === 0) return 'ontem';
-
-    return null;
-  }, [useCustomRange, customStart, customEnd, today]);
 
   // Values state: Map<"empresa:dateKey", number | null>
   const [values, setValues] = useState<Map<string, number | null>>(new Map());
@@ -313,7 +144,8 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
         // Get value from Supabase data
         const existing = existingData.get(key);
 
-        if (existing !== undefined && existing > 0) {
+        const hasExisting = existing !== undefined && existing !== null;
+        if (hasExisting) {
           newValues.set(key, existing);
           newSavedFields.add(key);
         } else {
@@ -337,7 +169,7 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
       companies.forEach(c => {
         const key = `${c.empresa}:${dateKey}`;
         const value = values.get(key);
-        if (value != null && value > 0) {
+        if (value != null) {
           total += value;
           filledCount++;
         }
@@ -387,13 +219,15 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
 
     setEditingValue(finalValue);
 
+    const isEmpty = finalValue.trim() === '';
     const cleanValue = finalValue.replace(',', '.');
     const numValue = cleanValue ? parseFloat(cleanValue) : 0;
     const key = `${empresa}:${dateKey}`;
+    const shouldSaveValue = !isEmpty && numValue >= 0;
 
     setValues(prev => {
       const next = new Map(prev);
-      next.set(key, numValue || null);
+      next.set(key, shouldSaveValue ? numValue : null);
       return next;
     });
 
@@ -403,12 +237,12 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
     savingTimeoutRef.current = setTimeout(async () => {
       setIsSaving(true);
 
-      const result = await onSave(empresa, dateKey, numValue);
+      const result = await onSave(empresa, dateKey, shouldSaveValue ? numValue : null);
 
       if (result.success) {
         setSavedFields(prev => {
           const next = new Set(prev);
-          if (numValue > 0) {
+          if (shouldSaveValue) {
             next.add(key);
           } else {
             next.delete(key);
@@ -481,9 +315,7 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
       <header className={styles.header}>
         <div className={styles.headerTop}>
           <div className={styles.headerTitle}>
-            <h2 className={styles.title}>
-              {useCustomRange ? 'Período Personalizado' : isMonday ? 'Fim de Semana' : 'Semana'}
-            </h2>
+            <h2 className={styles.title}>Mês de {monthLabel}</h2>
             <span className={styles.subtitle}>
               {daysToShow.length} {daysToShow.length === 1 ? 'dia' : 'dias'} para preencher
               {isSaving && <span className={styles.savingIndicator}> • Salvando...</span>}
@@ -503,73 +335,31 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
             <button
               type="button"
               className={styles.navButton}
-              onClick={() => navigatePeriod('prev')}
-              title="Período anterior"
+              onClick={() => navigateMonth('prev')}
+              title="Mês anterior"
             >
               <ChevronLeft size={18} />
             </button>
-            <div className={styles.datePresets}>
-              <button
-                type="button"
-                className={`${styles.presetButton} ${activePreset === 'ontem' ? styles.active : ''}`}
-                onClick={() => setPreset('ontem')}
-              >
-                Ontem
-              </button>
-              <button
-                type="button"
-                className={`${styles.presetButton} ${activePreset === 'semana' ? styles.active : ''}`}
-                onClick={() => setPreset('semana')}
-              >
-                Semana
-              </button>
-              <button
-                type="button"
-                className={`${styles.presetButton} ${activePreset === 'mes' ? styles.active : ''}`}
-                onClick={() => setPreset('mes')}
-              >
-                Mês
-              </button>
+            <div className={styles.monthPicker}>
+              <Calendar size={16} className={styles.calendarIcon} />
+              <input
+                type="month"
+                className={styles.monthInput}
+                value={toMonthInputValue(selectedMonth)}
+                onChange={handleMonthChange}
+                max={toMonthInputValue(today)}
+              />
             </div>
             <button
               type="button"
               className={styles.navButton}
-              onClick={() => navigatePeriod('next')}
-              title="Próximo período"
+              onClick={() => navigateMonth('next')}
+              title="Próximo mês"
+              disabled={selectedMonth.getFullYear() === today.getFullYear() && selectedMonth.getMonth() === today.getMonth()}
             >
               <ChevronRight size={18} />
             </button>
           </div>
-          <div className={styles.dateInputs}>
-            <Calendar size={16} className={styles.calendarIcon} />
-            <input
-              type="date"
-              className={styles.dateInput}
-              value={customStart ? toDateInputValue(customStart) : ''}
-              onChange={handleCustomStartChange}
-              max={toDateInputValue(today)}
-              placeholder="De"
-            />
-            <span className={styles.dateSeparator}>até</span>
-            <input
-              type="date"
-              className={styles.dateInput}
-              value={customEnd ? toDateInputValue(customEnd) : ''}
-              onChange={handleCustomEndChange}
-              min={customStart ? toDateInputValue(customStart) : undefined}
-              max={toDateInputValue(today)}
-              placeholder="Até"
-            />
-          </div>
-          {useCustomRange && (
-            <button
-              type="button"
-              className={styles.resetButton}
-              onClick={resetToDefault}
-            >
-              Padrão
-            </button>
-          )}
         </div>
 
       </header>

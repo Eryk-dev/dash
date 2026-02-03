@@ -26,12 +26,12 @@ export function useGoals() {
     }
   }, [yearlyGoals]);
 
-  // Get goals for current month (backward compatibility)
-  const currentMonth = new Date().getMonth() + 1; // 1-12
+  // Default to current month, but can be overridden
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
 
   const goals = useMemo((): CompanyGoal[] => {
-    return toMonthlyGoals(yearlyGoals, currentMonth);
-  }, [yearlyGoals, currentMonth]);
+    return toMonthlyGoals(yearlyGoals, selectedMonth);
+  }, [yearlyGoals, selectedMonth]);
 
   const updateYearlyGoals = useCallback((newGoals: CompanyYearlyGoal[]) => {
     setYearlyGoals(newGoals);
@@ -55,21 +55,21 @@ export function useGoals() {
   }, []);
 
   const getCompanyGoal = useCallback((empresa: string, month?: number): number => {
-    const m = month ?? currentMonth;
+    const m = month ?? selectedMonth;
     const goal = yearlyGoals.find((g) => g.empresa === empresa);
     return goal?.metas[m] ?? 0;
-  }, [yearlyGoals, currentMonth]);
+  }, [yearlyGoals, selectedMonth]);
 
   const getGroupGoal = useCallback((grupo: string, month?: number): number => {
-    const m = month ?? currentMonth;
+    const m = month ?? selectedMonth;
     return yearlyGoals
       .filter((g) => g.grupo === grupo)
       .reduce((sum, g) => sum + (g.metas[m] ?? 0), 0);
-  }, [yearlyGoals, currentMonth]);
+  }, [yearlyGoals, selectedMonth]);
 
   const totalGoal = useMemo(() => {
-    return yearlyGoals.reduce((sum, g) => sum + (g.metas[currentMonth] ?? 0), 0);
-  }, [yearlyGoals, currentMonth]);
+    return yearlyGoals.reduce((sum, g) => sum + (g.metas[selectedMonth] ?? 0), 0);
+  }, [yearlyGoals, selectedMonth]);
 
   // Total goal for year
   const totalYearGoal = useMemo(() => {
@@ -86,19 +86,20 @@ export function useGoals() {
       if (updated) {
         return {
           ...g,
-          metas: { ...g.metas, [currentMonth]: updated.metaMensal }
+          metas: { ...g.metas, [selectedMonth]: updated.metaMensal }
         };
       }
       return g;
     }));
-  }, [currentMonth]);
+  }, [selectedMonth]);
 
   return {
     goals,
     yearlyGoals,
     totalGoal,
     totalYearGoal,
-    currentMonth,
+    selectedMonth,
+    setSelectedMonth,
     updateGoals,
     updateYearlyGoals,
     updateGoalForMonth,

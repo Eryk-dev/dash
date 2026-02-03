@@ -20,8 +20,14 @@ export interface KPIs {
   percentualDoTotal: number;
 }
 
+export interface CoverageMetrics {
+  observed: number;
+  expected: number;
+  percent: number;
+}
+
 export interface GoalMetrics {
-  metaMensal: number;           // Meta total do mês
+  metaMensal: number;          // Meta do período selecionado
   metaProporcional: number;     // Meta proporcional até o dia atual
   realizado: number;            // Faturamento realizado no mês
   gapProporcional: number;      // Diferença entre realizado e meta proporcional
@@ -42,4 +48,10 @@ export interface GoalMetrics {
   realizadoAno: number;         // Faturamento realizado no ano
   mesesNoAno: number;           // Meses no ano (12)
   mesAtual: number;             // Mês atual (1-12)
+  coverage: {
+    dia: CoverageMetrics;
+    semana: CoverageMetrics;
+    mes: CoverageMetrics;
+    ano: CoverageMetrics;
+  };
 }

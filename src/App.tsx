@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useSupabaseFaturamento } from './hooks/useSupabaseFaturamento';
 import { useFilters } from './hooks/useFilters';
 import { useGoals } from './hooks/useGoals';
@@ -23,12 +23,12 @@ import styles from './App.module.css';
 
 function App() {
   // All data comes from Supabase
-  const { data, upsertEntry } = useSupabaseFaturamento();
+  const { data, upsertEntry, deleteEntry } = useSupabaseFaturamento({ includeZero: true });
 
   const [currentView, setCurrentView] = useState<ViewType>('geral');
   const [showGoalEditor, setShowGoalEditor] = useState(false);
 
-  const { goals, yearlyGoals, totalGoal, totalYearGoal, updateYearlyGoals, getCompanyGoal, getGroupGoal } = useGoals();
+  const { goals, yearlyGoals, totalGoal, totalYearGoal, updateYearlyGoals, getCompanyGoal, getGroupGoal, setSelectedMonth } = useGoals();
 
   const {
     filters,
@@ -57,17 +57,54 @@ function App() {
     toggleComparison,
     setCustomComparisonRange,
     clearCustomComparison,
-  } = useFilters(data, { goals, totalGoal, totalYearGoal, getCompanyGoal, getGroupGoal });
+  } = useFilters(data, { goals, totalGoal, totalYearGoal, getCompanyGoal, getGroupGoal, setSelectedMonth });
 
   const hasEntityFilter =
     filters.empresas.length > 0 ||
     filters.grupos.length > 0 ||
     filters.segmentos.length > 0;
 
-  // Calculate daily goal for chart reference line
-  const dailyGoal = goalMetrics.diasNoMes > 0
-    ? goalMetrics.metaMensal / goalMetrics.diasNoMes
-    : 0;
+  // Use the daily goal from goalMetrics (already calculated from micro to macro)
+  const dailyGoal = goalMetrics.metaDia;
+
+  // Aggregate all data by date for historical projections
+  const allHistoricalDailyData = useMemo(() => {
+    const filtered = data.filter((record) => {
+      if (filters.empresas.length > 0 && !filters.empresas.includes(record.empresa)) return false;
+      if (filters.grupos.length > 0 && !filters.grupos.includes(record.grupo)) return false;
+      if (filters.segmentos.length > 0 && !filters.segmentos.includes(record.segmento)) return false;
+      return true;
+    });
+
+    const byDate = new Map<string, { date: Date; total: number }>();
+    filtered.forEach((record) => {
+      const key = record.data.toISOString().split('T')[0];
+      const existing = byDate.get(key);
+      if (existing) {
+        existing.total += record.faturamento;
+      } else {
+        byDate.set(key, { date: record.data, total: record.faturamento });
+      }
+    });
+    return Array.from(byDate.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [data, filters.empresas, filters.grupos, filters.segmentos]);
+
+  // Raw data with empresa/grupo for seasonality calculations
+  const rawDataForSeasonality = useMemo(() => {
+    return data.map(record => ({
+      date: record.data,
+      value: record.faturamento,
+      empresa: record.empresa,
+      grupo: record.grupo,
+    }));
+  }, [data]);
+
+  const handleSaveEntry = useCallback(async (empresa: string, date: string, valor: number | null) => {
+    if (valor === null) {
+      return deleteEntry(empresa, date);
+    }
+    return upsertEntry(empresa, date, valor);
+  }, [deleteEntry, upsertEntry]);
 
   return (
     <div className={styles.app}>
@@ -281,9 +318,12 @@ function App() {
             metaProporcional={goalMetrics.metaProporcional}
             diaAtual={goalMetrics.diaAtual}
             diasNoMes={goalMetrics.diasNoMes}
+            coverage={goalMetrics.coverage}
             filters={filters}
             datePreset={datePreset}
             dailyData={dailyData}
+            allHistoricalData={allHistoricalDailyData}
+            rawDataForSeasonality={rawDataForSeasonality}
             realizadoHoje={goalMetrics.realizadoDia}
             metaHoje={goalMetrics.metaDia}
             realizadoSemana={goalMetrics.realizadoSemana}
@@ -301,7 +341,7 @@ function App() {
           <DataEntry
             data={data}
             goals={yearlyGoals}
-            onSave={upsertEntry}
+            onSave={handleSaveEntry}
           />
         </section>
       )}
