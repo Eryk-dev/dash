@@ -59,6 +59,12 @@
   width: auto;
 }
 
+@media (prefers-color-scheme: dark) {
+  .logo {
+    filter: invert(1) brightness(1.05);
+  }
+}
+
 /* Filters */
 .filters {
   display: flex;
