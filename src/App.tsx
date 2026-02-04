@@ -252,6 +252,7 @@ function App() {
               onChange={(v) => toggleFilterValue('grupos', v)}
               onClear={() => updateFilter('grupos', [])}
               native={isMobile}
+              nativeMode="sheet"
             />
             <MultiSelect
               label="Segmento"
@@ -260,6 +261,7 @@ function App() {
               onChange={(v) => toggleFilterValue('segmentos', v)}
               onClear={() => updateFilter('segmentos', [])}
               native={isMobile}
+              nativeMode="sheet"
             />
             <MultiSelect
               label="Linha"
@@ -268,6 +270,7 @@ function App() {
               onChange={(v) => toggleFilterValue('empresas', v)}
               onClear={() => updateFilter('empresas', [])}
               native={isMobile}
+              nativeMode="sheet"
             />
             <div className={styles.filtersDivider} />
             <DatePresets value={datePreset} onChange={setDatePreset} />
@@ -429,6 +432,7 @@ function App() {
               onChange={(v) => toggleFilterValue('grupos', v)}
               onClear={() => updateFilter('grupos', [])}
               native={isMobile}
+              nativeMode="sheet"
             />
             <MultiSelect
               label="Segmento"
@@ -437,6 +441,7 @@ function App() {
               onChange={(v) => toggleFilterValue('segmentos', v)}
               onClear={() => updateFilter('segmentos', [])}
               native={isMobile}
+              nativeMode="sheet"
             />
             <MultiSelect
               label="Linha"
@@ -445,6 +450,7 @@ function App() {
               onChange={(v) => toggleFilterValue('empresas', v)}
               onClear={() => updateFilter('empresas', [])}
               native={isMobile}
+              nativeMode="sheet"
             />
             <div className={styles.filtersDivider} />
             <DatePresets value={datePreset} onChange={setDatePreset} />

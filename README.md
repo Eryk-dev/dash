@@ -9,6 +9,11 @@ Dashboard de acompanhamento de faturamento, metas e projeções por **Linha de R
 - Gestão de **Linhas de Receita** (tela “Linhas”) com inclusão/remoção automática em filtros e metas.
 - PWA instalável (ícone customizado e manifesto configurado).
 
+## Mobile (UX)
+- Filtros abrem em **sheet** com checkboxes e botão **Aplicar**.
+- “Todos” é limpo automaticamente ao selecionar itens.
+- Tooltips de gráfico desativados no mobile para evitar cliques acidentais durante scroll.
+
 ## Rodando localmente
 ```bash
 npm install

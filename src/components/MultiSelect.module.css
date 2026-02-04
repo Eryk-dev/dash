@@ -38,6 +38,107 @@
   color: var(--ink);
 }
 
+.sheetOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+}
+
+.sheet {
+  width: 100%;
+  background: var(--paper);
+  border-radius: 16px 16px 0 0;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 70vh;
+}
+
+.sheetHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sheetTitle {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.sheetClose {
+  border: none;
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.sheetSearch {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+
+.sheetOptions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  overflow-y: auto;
+}
+
+.sheetOption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  text-align: left;
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+
+.sheetOption:hover {
+  background: var(--surface);
+}
+
+.sheetActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.sheetPrimary {
+  flex: 1;
+  border: none;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.sheetSecondary {
+  flex: 1;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: var(--text-sm);
+}
+
 .label {
   font-size: var(--text-xs);
   color: var(--ink-faint);

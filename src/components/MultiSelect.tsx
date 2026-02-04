@@ -10,6 +10,7 @@ interface MultiSelectProps {
   onClear: () => void;
   placeholder?: string;
   native?: boolean;
+  nativeMode?: 'multi' | 'single' | 'sheet';
 }
 
 export function MultiSelect({
@@ -20,15 +21,36 @@ export function MultiSelect({
   onClear,
   placeholder = 'Todos',
   native = false,
+  nativeMode = 'multi',
 }: MultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [draftValues, setDraftValues] = useState<string[]>([]);
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const filteredOptions = options.filter((opt) =>
     opt.toLowerCase().includes(search.toLowerCase())
   );
+
+  useEffect(() => {
+    if (isSheetOpen) {
+      setDraftValues(values);
+      setSearch('');
+    }
+  }, [isSheetOpen, values]);
+
+  useEffect(() => {
+    if (isSheetOpen) {
+      const original = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = original;
+      };
+    }
+    return undefined;
+  }, [isSheetOpen]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -55,6 +77,161 @@ export function MultiSelect({
       : `${values.length} selecionados`;
 
   if (native) {
+    if (nativeMode === 'sheet') {
+      const filteredDraft = options.filter((opt) =>
+        opt.toLowerCase().includes(search.toLowerCase())
+      );
+      const toggleDraft = (value: string) => {
+        if (value === '__ALL__') {
+          setDraftValues([]);
+          return;
+        }
+        setDraftValues((prev) =>
+          prev.includes(value)
+            ? prev.filter((v) => v !== value)
+            : [...prev, value]
+        );
+      };
+      const applyChanges = () => {
+        const nextSet = new Set(draftValues);
+        const currentSet = new Set(values);
+        values.forEach((value) => {
+          if (!nextSet.has(value)) onChange(value);
+        });
+        draftValues.forEach((value) => {
+          if (!currentSet.has(value)) onChange(value);
+        });
+        if (draftValues.length === 0 && values.length > 0) {
+          onClear();
+        }
+        setIsSheetOpen(false);
+      };
+      return (
+        <div className={styles.container} ref={ref}>
+          <span className={styles.label}>{label}</span>
+          <button
+            type="button"
+            className={styles.trigger}
+            onClick={() => setIsSheetOpen(true)}
+          >
+            <span className={values.length > 0 ? styles.value : styles.placeholder}>
+              {displayText}
+            </span>
+            <ChevronDown size={14} className={styles.chevron} />
+          </button>
+
+          {isSheetOpen && (
+            <div className={styles.sheetOverlay} onClick={() => setIsSheetOpen(false)}>
+              <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
+                <div className={styles.sheetHeader}>
+                  <span className={styles.sheetTitle}>{label}</span>
+                  <button
+                    type="button"
+                    className={styles.sheetClose}
+                    onClick={() => setIsSheetOpen(false)}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  className={styles.sheetSearch}
+                  placeholder="Buscar..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+                <div className={styles.sheetOptions}>
+                  <button
+                    type="button"
+                    className={`${styles.sheetOption} ${draftValues.length === 0 ? styles.selected : ''}`}
+                    onClick={() => toggleDraft('__ALL__')}
+                  >
+                    <span className={styles.checkbox}>
+                      {draftValues.length === 0 && <Check size={12} />}
+                    </span>
+                    {placeholder}
+                  </button>
+                  {filteredDraft.map((opt) => {
+                    const isSelected = draftValues.includes(opt);
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        className={`${styles.sheetOption} ${isSelected ? styles.selected : ''}`}
+                        onClick={() => toggleDraft(opt)}
+                      >
+                        <span className={styles.checkbox}>
+                          {isSelected && <Check size={12} />}
+                        </span>
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className={styles.sheetActions}>
+                  <button
+                    type="button"
+                    className={styles.sheetSecondary}
+                    onClick={() => {
+                      setDraftValues([]);
+                    }}
+                  >
+                    Limpar
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.sheetPrimary}
+                    onClick={applyChanges}
+                  >
+                    Aplicar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (nativeMode === 'single') {
+      const currentValue = values.length > 0 ? values[0] : '__ALL__';
+      return (
+        <div className={styles.container}>
+          <span className={styles.label}>{label}</span>
+          <div className={styles.nativeRow}>
+            <select
+              className={styles.nativeSelect}
+              value={currentValue}
+              onChange={(e) => {
+                const selected = e.target.value;
+                if (selected === '__ALL__') {
+                  onClear();
+                  return;
+                }
+                if (values.length === 1 && values[0] === selected) return;
+                onClear();
+                onChange(selected);
+              }}
+            >
+              <option value="__ALL__">{placeholder}</option>
+              {options.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+            {values.length > 0 && (
+              <button
+                type="button"
+                className={styles.nativeClear}
+                onClick={onClear}
+              >
+                Limpar
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className={styles.container}>
         <span className={styles.label}>{label}</span>
@@ -64,8 +241,9 @@ export function MultiSelect({
             multiple
             value={values.length > 0 ? values : ['__ALL__']}
             onChange={(e) => {
-              const selected = Array.from(e.target.selectedOptions).map((opt) => opt.value);
-              if (selected.includes('__ALL__') || selected.length === 0) {
+              const selectedRaw = Array.from(e.target.selectedOptions).map((opt) => opt.value);
+              const selected = selectedRaw.filter((value) => value !== '__ALL__');
+              if (selected.length === 0) {
                 onClear();
                 return;
               }
