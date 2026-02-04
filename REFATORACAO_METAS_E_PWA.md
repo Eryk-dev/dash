@@ -145,6 +145,33 @@ Comparação de preenchimento usa **meta ajustada** por data.
 
 ---
 
+## Linhas de Receita (antigo “Empresa”)
+
+### Conceito
+No sistema, **“Empresa” agora é tratado como “Linha de Receita”** (nome de linha).
+Os campos técnicos continuam usando `empresa` por compatibilidade com Supabase, mas **toda a UI** deve falar “Linha”.
+
+### Fonte de verdade
+- `useRevenueLines` mantém a lista de linhas (nome, grupo, segmento) em **localStorage**.
+- A lista é a base para **filtros**, **metas**, **segmentos** e **mapeamento** de dados.
+
+### Regras
+- Ao **criar** uma linha:
+  - ela entra imediatamente nos filtros.
+  - um registro de metas anual é criado automaticamente (com metas 0).
+- Ao **remover** uma linha:
+  - ela sai dos filtros e telas.
+  - a meta anual correspondente é removida.
+  - dados históricos continuam no banco, mas não entram nos cálculos.
+
+### Arquivos principais
+- `src/hooks/useRevenueLines.ts`
+- `src/hooks/useSupabaseFaturamento.ts` (mapeia grupo/segmento)
+- `src/hooks/useFilters.ts` (usa lista de linhas como base dos filtros)
+- `src/components/RevenueLinesManager.tsx` (tela de cadastro)
+
+---
+
 ## PWA (Mobile)
 
 ### Arquivos adicionados

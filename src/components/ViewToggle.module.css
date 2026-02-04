@@ -1,9 +1,11 @@
 .container {
   display: flex;
+  flex-wrap: wrap;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 3px;
+  gap: 2px;
 }
 
 .button {

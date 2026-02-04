@@ -1,8 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import type { FaturamentoRecord, Filters, KPIs, GoalMetrics } from '../types';
+import type { FaturamentoRecord, Filters, KPIs, GoalMetrics, RevenueLine } from '../types';
 import { startOfWeek, startOfMonth, startOfYear, getDaysInMonth, differenceInCalendarDays, addDays } from 'date-fns';
 import type { CompanyYearlyGoal } from '../data/goals';
-import { COMPANIES } from '../data/fallbackData';
 import {
   buildCompanyMetaInfo,
   filterCompaniesByFilters,
@@ -26,10 +25,11 @@ export interface DailyDataPoint {
 interface GoalHelpers {
   yearlyGoals: CompanyYearlyGoal[];
   setSelectedMonth: (month: number) => void;
+  lines: RevenueLine[];
 }
 
 export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) {
-  const { yearlyGoals, setSelectedMonth } = goalHelpers;
+  const { yearlyGoals, setSelectedMonth, lines } = goalHelpers;
   const [filters, setFilters] = useState<Filters>({
     empresas: [],
     grupos: [],
@@ -39,8 +39,27 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
   });
 
   const [datePreset, setDatePreset] = useState<DatePreset>('all');
+  const lineSets = useMemo(() => {
+    return {
+      empresas: new Set(lines.map((l) => l.empresa)),
+      grupos: new Set(lines.map((l) => l.grupo)),
+      segmentos: new Set(lines.map((l) => l.segmento)),
+    };
+  }, [lines]);
 
-  const companyMetaInfo = useMemo(() => buildCompanyMetaInfo(yearlyGoals), [yearlyGoals]);
+  useEffect(() => {
+    setFilters((prev) => ({
+      ...prev,
+      empresas: prev.empresas.filter((e) => lineSets.empresas.has(e)),
+      grupos: prev.grupos.filter((g) => lineSets.grupos.has(g)),
+      segmentos: prev.segmentos.filter((s) => lineSets.segmentos.has(s)),
+    }));
+  }, [lineSets]);
+
+  const companyMetaInfo = useMemo(
+    () => buildCompanyMetaInfo(yearlyGoals, lines),
+    [yearlyGoals, lines]
+  );
   const selectedCompaniesForGoals = useMemo(
     () => filterCompaniesByFilters(companyMetaInfo, filters),
     [companyMetaInfo, filters]
@@ -48,24 +67,16 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
 
   // Extract unique values for dropdowns
   const options = useMemo(() => {
-    const empresas = data.length > 0
-      ? [...new Set(data.map((d) => d.empresa))].sort()
-      : [...new Set(COMPANIES.map((c) => c.empresa))].sort();
-
-    const grupos = data.length > 0
-      ? [...new Set(data.map((d) => d.grupo))].sort()
-      : [...new Set(COMPANIES.map((c) => c.grupo))].sort();
-
-    const segmentos = data.length > 0
-      ? [...new Set(data.map((d) => d.segmento))].sort()
-      : [...new Set(COMPANIES.map((c) => c.segmento))].sort();
+    const empresas = [...new Set(lines.map((c) => c.empresa))].sort();
+    const grupos = [...new Set(lines.map((c) => c.grupo))].sort();
+    const segmentos = [...new Set(lines.map((c) => c.segmento))].sort();
 
     const dates = data.map((d) => d.data.getTime());
     const minDate = dates.length > 0 ? new Date(Math.min(...dates)) : null;
     const maxDate = dates.length > 0 ? new Date(Math.max(...dates)) : null;
 
     return { empresas, grupos, segmentos, minDate, maxDate };
-  }, [data]);
+  }, [data, lines]);
 
   // Calculate effective date range based on preset or custom dates
   const effectiveDateRange = useMemo(() => {

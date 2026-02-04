@@ -1,6 +1,6 @@
 import styles from './ViewToggle.module.css';
 
-export type ViewType = 'geral' | 'metas' | 'entrada';
+export type ViewType = 'geral' | 'metas' | 'entrada' | 'linhas';
 
 interface ViewToggleProps {
   value: ViewType;
@@ -27,6 +27,12 @@ export function ViewToggle({ value, onChange }: ViewToggleProps) {
         onClick={() => onChange('entrada')}
       >
         Entrada
+      </button>
+      <button
+        className={`${styles.button} ${value === 'linhas' ? styles.active : ''}`}
+        onClick={() => onChange('linhas')}
+      >
+        Linhas
       </button>
     </div>
   );

@@ -50,7 +50,7 @@ export function GoalTable({ data, onEditGoals }: GoalTableProps) {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <span className={styles.title}>Metas por Empresa</span>
+        <span className={styles.title}>Metas por Linha</span>
         <button className={styles.editButton} onClick={onEditGoals}>
           <Settings2 size={14} />
           Editar Metas
@@ -62,7 +62,7 @@ export function GoalTable({ data, onEditGoals }: GoalTableProps) {
           <thead>
             <tr>
               <th onClick={() => handleSort('empresa')} className={styles.sortable}>
-                Empresa {sortBy === 'empresa' && (sortDesc ? '↓' : '↑')}
+                Linha {sortBy === 'empresa' && (sortDesc ? '↓' : '↑')}
               </th>
               <th>Realizado</th>
               <th>Meta</th>

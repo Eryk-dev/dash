@@ -2,14 +2,18 @@ import { addDays, getDaysInMonth } from 'date-fns';
 import type { Filters } from '../types';
 import type { CompanyYearlyGoal } from '../data/goals';
 import { COMPANIES } from '../data/fallbackData';
+import type { RevenueLine } from '../types';
 
 export interface CompanyMetaInfo extends CompanyYearlyGoal {
   segmento: string;
 }
 
-export function buildCompanyMetaInfo(yearlyGoals: CompanyYearlyGoal[]): CompanyMetaInfo[] {
+export function buildCompanyMetaInfo(
+  yearlyGoals: CompanyYearlyGoal[],
+  lines: RevenueLine[] = COMPANIES
+): CompanyMetaInfo[] {
   return yearlyGoals.map((goal) => {
-    const companyInfo = COMPANIES.find((c) => c.empresa === goal.empresa);
+    const companyInfo = lines.find((c) => c.empresa === goal.empresa);
     return {
       ...goal,
       segmento: companyInfo?.segmento || 'OUTROS',
@@ -117,4 +121,3 @@ export function getCompanyAdjustedDailyGoalForDate(
   if (!company) return 0;
   return getCompanyAdjustedDailyGoal(company, date);
 }
-

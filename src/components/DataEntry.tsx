@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { Check, AlertCircle, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { FaturamentoRecord } from '../types';
+import type { FaturamentoRecord, RevenueLine } from '../types';
 import type { CompanyYearlyGoal } from '../data/goals';
 import { formatBRL } from '../utils/dataParser';
 import {
@@ -18,6 +18,7 @@ function toMonthInputValue(date: Date): string {
 interface DataEntryProps {
   data: FaturamentoRecord[];
   goals: CompanyYearlyGoal[];
+  lines: RevenueLine[];
   onSave: (empresa: string, date: string, valor: number | null) => Promise<{ success: boolean; error?: string }>;
 }
 
@@ -45,7 +46,7 @@ function getShortLabel(date: Date): string {
   return date.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' }).replace('.', '');
 }
 
-export function DataEntry({ data, goals, onSave }: DataEntryProps) {
+export function DataEntry({ data, goals, lines, onSave }: DataEntryProps) {
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -101,7 +102,7 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
 
   // Use first day for month calculations
   const referenceDate = daysToShow[0]?.date || today;
-  const companyMetaInfo = useMemo(() => buildCompanyMetaInfo(goals), [goals]);
+  const companyMetaInfo = useMemo(() => buildCompanyMetaInfo(goals, lines), [goals, lines]);
 
   // Build company info from goals (with adjusted daily targets)
   const companies = useMemo(() => {
@@ -382,7 +383,7 @@ export function DataEntry({ data, goals, onSave }: DataEntryProps) {
       <div className={styles.scrollWrapper}>
         {/* Days header */}
         <div className={styles.daysHeader}>
-          <div className={styles.daysHeaderLabel}>Empresa</div>
+          <div className={styles.daysHeaderLabel}>Linha</div>
           {daysToShow.map((day, i) => {
             const stats = dayStats[i];
             return (

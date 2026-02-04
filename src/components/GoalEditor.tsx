@@ -71,7 +71,7 @@ export function GoalEditor({ yearlyGoals, onSave, onClose }: GoalEditorProps) {
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
-          <h2 className={styles.title}>Metas Anuais por Empresa</h2>
+          <h2 className={styles.title}>Metas Anuais por Linha</h2>
           <button className={styles.closeButton} onClick={onClose}>
             <X size={20} />
           </button>
@@ -80,7 +80,7 @@ export function GoalEditor({ yearlyGoals, onSave, onClose }: GoalEditorProps) {
         <div className={styles.toolbar}>
           <input
             type="text"
-            placeholder="Buscar empresa ou grupo..."
+            placeholder="Buscar linha ou grupo..."
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className={styles.searchInput}
@@ -112,7 +112,7 @@ export function GoalEditor({ yearlyGoals, onSave, onClose }: GoalEditorProps) {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th className={styles.stickyCol}>Empresa</th>
+                <th className={styles.stickyCol}>Linha</th>
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => (
                   <th key={m} className={styles.monthHeader}>{MONTH_NAMES[m]}</th>
                 ))}

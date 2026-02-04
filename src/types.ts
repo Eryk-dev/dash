@@ -6,6 +6,12 @@ export interface FaturamentoRecord {
   faturamento: number;
 }
 
+export interface RevenueLine {
+  empresa: string;
+  grupo: string;
+  segmento: string;
+}
+
 export interface Filters {
   empresas: string[];
   grupos: string[];

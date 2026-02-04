@@ -1,7 +1,8 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useSupabaseFaturamento } from './hooks/useSupabaseFaturamento';
 import { useFilters } from './hooks/useFilters';
 import { useGoals } from './hooks/useGoals';
+import { useRevenueLines } from './hooks/useRevenueLines';
 import { formatBRL, formatPercent } from './utils/dataParser';
 import { ViewToggle, type ViewType } from './components/ViewToggle';
 import { MultiSelect } from './components/MultiSelect';
@@ -17,19 +18,28 @@ import { ComparisonToggle } from './components/ComparisonToggle';
 import { DataEntry } from './components/DataEntry';
 import { BreakdownBars } from './components/BreakdownBars';
 import { SharePieChart } from './components/SharePieChart';
+import { RevenueLinesManager } from './components/RevenueLinesManager';
 import { RotateCcw, Settings2 } from 'lucide-react';
 import logo from './assets/logo.svg';
 import styles from './App.module.css';
 
-function App() {
-  // All data comes from Supabase
-  const { data, upsertEntry, deleteEntry } = useSupabaseFaturamento({ includeZero: true });
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
 
+function App() {
   const [currentView, setCurrentView] = useState<ViewType>('geral');
   const [showGoalEditor, setShowGoalEditor] = useState(false);
   const [pieMode, setPieMode] = useState<'segmento' | 'grupo' | 'empresa'>('segmento');
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [showIosHint, setShowIosHint] = useState(false);
 
   const { yearlyGoals, updateYearlyGoals, setSelectedMonth } = useGoals();
+  const { lines, addLine, updateLine, removeLine } = useRevenueLines(yearlyGoals);
+
+  // All data comes from Supabase
+  const { data, upsertEntry, deleteEntry } = useSupabaseFaturamento({ includeZero: true, lines });
 
   const {
     filters,
@@ -59,7 +69,7 @@ function App() {
     toggleComparison,
     setCustomComparisonRange,
     clearCustomComparison,
-  } = useFilters(data, { yearlyGoals, setSelectedMonth });
+  } = useFilters(data, { yearlyGoals, setSelectedMonth, lines });
 
   const hasEntityFilter =
     filters.empresas.length > 0 ||
@@ -122,12 +132,44 @@ function App() {
       case 'grupo':
         return { title: 'Por Grupo', data: groupPieData };
       case 'empresa':
-        return { title: 'Por Empresa', data: empresaPieData };
+        return { title: 'Por Linha', data: empresaPieData };
       case 'segmento':
       default:
         return { title: 'Por Segmento', data: segmentPieData };
     }
   }, [pieMode, groupPieData, empresaPieData, segmentPieData]);
+
+  const handleAddLine = useCallback((line: { empresa: string; grupo: string; segmento: string }) => {
+    addLine(line);
+    const metas: Record<number, number> = {};
+    for (let m = 1; m <= 12; m += 1) {
+      metas[m] = 0;
+    }
+    if (!yearlyGoals.some((g) => g.empresa === line.empresa)) {
+      updateYearlyGoals([
+        ...yearlyGoals,
+        {
+          empresa: line.empresa,
+          grupo: line.grupo,
+          metas,
+        },
+      ]);
+    }
+  }, [addLine, updateYearlyGoals, yearlyGoals]);
+
+  const handleUpdateLine = useCallback((empresa: string, updates: { grupo?: string; segmento?: string }) => {
+    updateLine(empresa, updates);
+    if (updates.grupo) {
+      updateYearlyGoals(yearlyGoals.map((g) =>
+        g.empresa === empresa ? { ...g, grupo: updates.grupo! } : g
+      ));
+    }
+  }, [updateLine, updateYearlyGoals, yearlyGoals]);
+
+  const handleRemoveLine = useCallback((empresa: string) => {
+    removeLine(empresa);
+    updateYearlyGoals(yearlyGoals.filter((g) => g.empresa !== empresa));
+  }, [removeLine, updateYearlyGoals, yearlyGoals]);
 
   const handleSaveEntry = useCallback(async (empresa: string, date: string, valor: number | null) => {
     if (valor === null) {
@@ -135,6 +177,35 @@ function App() {
     }
     return upsertEntry(empresa, date, valor);
   }, [deleteEntry, upsertEntry]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event as BeforeInstallPromptEvent);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  useEffect(() => {
+    const onInstalled = () => setInstallPromptEvent(null);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => window.removeEventListener('appinstalled', onInstalled);
+  }, []);
+
+  useEffect(() => {
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || (navigator as Navigator & { standalone?: boolean }).standalone;
+    setShowIosHint(isIos && !isStandalone);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!installPromptEvent) return;
+    await installPromptEvent.prompt();
+    await installPromptEvent.userChoice;
+    setInstallPromptEvent(null);
+  };
 
   return (
     <div className={styles.app}>
@@ -152,6 +223,18 @@ function App() {
               <Settings2 size={16} />
               Editar Metas
             </button>
+          )}
+          {installPromptEvent && (
+            <button
+              type="button"
+              className={styles.installButton}
+              onClick={handleInstallClick}
+            >
+              Instalar
+            </button>
+          )}
+          {showIosHint && !installPromptEvent && (
+            <span className={styles.installHint}>No iOS: Compartilhar → Adicionar à Tela</span>
           )}
           <ViewToggle value={currentView} onChange={setCurrentView} />
         </div>
@@ -175,7 +258,7 @@ function App() {
               onClear={() => updateFilter('segmentos', [])}
             />
             <MultiSelect
-              label="Empresa"
+              label="Linha"
               values={filters.empresas}
               options={options.empresas}
               onChange={(v) => toggleFilterValue('empresas', v)}
@@ -285,7 +368,7 @@ function App() {
                     className={`${styles.pieTab} ${pieMode === 'empresa' ? styles.pieTabActive : ''}`}
                     onClick={() => setPieMode('empresa')}
                   >
-                    Empresa
+                    Linha
                   </button>
                 </div>
                 <SharePieChart
@@ -310,7 +393,7 @@ function App() {
           <section className={styles.grid}>
             <div className={styles.gridItem}>
               <BreakdownBars
-                title="Por Empresa"
+                title="Por Linha"
                 data={empresaBreakdown.map((e) => ({ label: e.empresa, value: e.total }))}
                 limit={8}
               />
@@ -349,7 +432,7 @@ function App() {
               onClear={() => updateFilter('segmentos', [])}
             />
             <MultiSelect
-              label="Empresa"
+              label="Linha"
               values={filters.empresas}
               options={options.empresas}
               onChange={(v) => toggleFilterValue('empresas', v)}
@@ -400,7 +483,19 @@ function App() {
           <DataEntry
             data={data}
             goals={yearlyGoals}
+            lines={lines}
             onSave={handleSaveEntry}
+          />
+        </section>
+      )}
+
+      {currentView === 'linhas' && (
+        <section className={styles.dataEntry}>
+          <RevenueLinesManager
+            lines={lines}
+            onAdd={handleAddLine}
+            onUpdate={handleUpdateLine}
+            onRemove={handleRemoveLine}
           />
         </section>
       )}

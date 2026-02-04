@@ -1,14 +1,24 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase, type FaturamentoRow } from '../lib/supabase';
-import type { FaturamentoRecord } from '../types';
+import type { FaturamentoRecord, RevenueLine } from '../types';
 import { COMPANIES } from '../data/fallbackData';
 
 interface UseSupabaseOptions {
   includeZero?: boolean;
+  lines?: RevenueLine[];
 }
 
 export function useSupabaseFaturamento(options: UseSupabaseOptions = {}) {
   const includeZero = options.includeZero ?? true;
+  const lineSource = options.lines && options.lines.length > 0 ? options.lines : COMPANIES;
+  const lineMap = useMemo(
+    () => new Map(lineSource.map((line) => [line.empresa, line])),
+    [lineSource]
+  );
+  const activeLineSet = useMemo(
+    () => new Set(lineSource.map((line) => line.empresa)),
+    [lineSource]
+  );
   const [data, setData] = useState<FaturamentoRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,8 +44,9 @@ export function useSupabaseFaturamento(options: UseSupabaseOptions = {}) {
           if (!isValid) return false;
           return includeZero ? value >= 0 : value > 0;
         })
+        .filter((row: FaturamentoRow) => activeLineSet.has(row.empresa))
         .map((row: FaturamentoRow) => {
-          const companyInfo = COMPANIES.find(c => c.empresa === row.empresa);
+          const companyInfo = lineMap.get(row.empresa);
           return {
             empresa: row.empresa,
             grupo: companyInfo?.grupo || 'OUTROS',
@@ -52,7 +63,7 @@ export function useSupabaseFaturamento(options: UseSupabaseOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [includeZero]);
+  }, [includeZero, lineMap, activeLineSet]);
 
   // Delete an entry
   const deleteEntry = useCallback(async (empresa: string, date: string) => {
@@ -91,7 +102,7 @@ export function useSupabaseFaturamento(options: UseSupabaseOptions = {}) {
 
       // Update local state
       setData(prev => {
-        const companyInfo = COMPANIES.find(c => c.empresa === empresa);
+        const companyInfo = lineMap.get(empresa);
         const newRecord: FaturamentoRecord = {
           empresa,
           grupo: companyInfo?.grupo || 'OUTROS',
@@ -107,7 +118,10 @@ export function useSupabaseFaturamento(options: UseSupabaseOptions = {}) {
 
         // Add new record when allowed
         if (valor > 0 || (includeZero && valor >= 0)) {
-          return [...filtered, newRecord];
+          if (activeLineSet.has(empresa)) {
+            return [...filtered, newRecord];
+          }
+          return filtered;
         }
         return filtered;
       });
@@ -117,7 +131,7 @@ export function useSupabaseFaturamento(options: UseSupabaseOptions = {}) {
       console.error('Error upserting entry:', err);
       return { success: false, error: err instanceof Error ? err.message : 'Erro ao salvar' };
     }
-  }, [includeZero]);
+  }, [includeZero, lineMap, activeLineSet]);
 
   // Get value for specific empresa/date
   const getValue = useCallback((empresa: string, date: string): number | null => {
