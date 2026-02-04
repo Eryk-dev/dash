@@ -26,7 +26,6 @@ export function MultiSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [draftValues, setDraftValues] = useState<string[]>([]);
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -36,10 +35,9 @@ export function MultiSelect({
 
   useEffect(() => {
     if (isSheetOpen) {
-      setDraftValues(values);
       setSearch('');
     }
-  }, [isSheetOpen, values]);
+  }, [isSheetOpen]);
 
   useEffect(() => {
     if (isSheetOpen) {
@@ -78,33 +76,15 @@ export function MultiSelect({
 
   if (native) {
     if (nativeMode === 'sheet') {
-      const filteredDraft = options.filter((opt) =>
+      const filteredSheetOptions = options.filter((opt) =>
         opt.toLowerCase().includes(search.toLowerCase())
       );
-      const toggleDraft = (value: string) => {
+      const toggleValue = (value: string) => {
         if (value === '__ALL__') {
-          setDraftValues([]);
+          onClear();
           return;
         }
-        setDraftValues((prev) =>
-          prev.includes(value)
-            ? prev.filter((v) => v !== value)
-            : [...prev, value]
-        );
-      };
-      const applyChanges = () => {
-        const nextSet = new Set(draftValues);
-        const currentSet = new Set(values);
-        values.forEach((value) => {
-          if (!nextSet.has(value)) onChange(value);
-        });
-        draftValues.forEach((value) => {
-          if (!currentSet.has(value)) onChange(value);
-        });
-        if (draftValues.length === 0 && values.length > 0) {
-          onClear();
-        }
-        setIsSheetOpen(false);
+        onChange(value);
       };
       return (
         <div className={styles.container} ref={ref}>
@@ -143,22 +123,22 @@ export function MultiSelect({
                 <div className={styles.sheetOptions}>
                   <button
                     type="button"
-                    className={`${styles.sheetOption} ${draftValues.length === 0 ? styles.selected : ''}`}
-                    onClick={() => toggleDraft('__ALL__')}
+                    className={`${styles.sheetOption} ${values.length === 0 ? styles.selected : ''}`}
+                    onClick={() => toggleValue('__ALL__')}
                   >
                     <span className={styles.checkbox}>
-                      {draftValues.length === 0 && <Check size={12} />}
+                      {values.length === 0 && <Check size={12} />}
                     </span>
                     {placeholder}
                   </button>
-                  {filteredDraft.map((opt) => {
-                    const isSelected = draftValues.includes(opt);
+                  {filteredSheetOptions.map((opt) => {
+                    const isSelected = values.includes(opt);
                     return (
                       <button
                         key={opt}
                         type="button"
                         className={`${styles.sheetOption} ${isSelected ? styles.selected : ''}`}
-                        onClick={() => toggleDraft(opt)}
+                        onClick={() => toggleValue(opt)}
                       >
                         <span className={styles.checkbox}>
                           {isSelected && <Check size={12} />}
@@ -167,24 +147,6 @@ export function MultiSelect({
                       </button>
                     );
                   })}
-                </div>
-                <div className={styles.sheetActions}>
-                  <button
-                    type="button"
-                    className={styles.sheetSecondary}
-                    onClick={() => {
-                      setDraftValues([]);
-                    }}
-                  >
-                    Limpar
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.sheetPrimary}
-                    onClick={applyChanges}
-                  >
-                    Aplicar
-                  </button>
                 </div>
               </div>
             </div>

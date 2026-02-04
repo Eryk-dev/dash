@@ -113,31 +113,6 @@
   background: var(--surface);
 }
 
-.sheetActions {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.sheetPrimary {
-  flex: 1;
-  border: none;
-  background: var(--ink);
-  color: var(--paper);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.sheetSecondary {
-  flex: 1;
-  border: 1px solid var(--line);
-  background: var(--paper);
-  color: var(--ink);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: var(--text-sm);
-}
 
 .label {
   font-size: var(--text-xs);
