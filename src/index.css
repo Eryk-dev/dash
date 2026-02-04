@@ -51,6 +51,35 @@
   --tracking-normal: 0;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #f2f2f2;
+    --ink-muted: #b3b3b3;
+    --ink-faint: #8a8a8a;
+    --paper: #0f0f0f;
+    --paper-subtle: #141414;
+    --line: rgba(255, 255, 255, 0.08);
+
+    --surface: #161616;
+
+    --positive-bg: rgba(35, 216, 211, 0.12);
+    --attention-bg: rgba(217, 119, 6, 0.18);
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.22);
+  }
+}
+
 * {
   margin: 0;
   padding: 0;
