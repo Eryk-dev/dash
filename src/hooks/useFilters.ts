@@ -38,7 +38,7 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
     dataFim: null,
   });
 
-  const [datePreset, setDatePreset] = useState<DatePreset>('all');
+  const [datePreset, setDatePreset] = useState<DatePreset>('mtd');
   const lineSets = useMemo(() => {
     return {
       empresas: new Set(lines.map((l) => l.empresa)),
@@ -705,7 +705,7 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
       dataInicio: null,
       dataFim: null,
     });
-    setDatePreset('all');
+    setDatePreset('mtd');
     setComparisonEnabled(false);
     setCustomComparisonStart(null);
     setCustomComparisonEnd(null);

@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import {
   LineChart,
   Line,
@@ -11,21 +10,8 @@ import {
 } from 'recharts';
 import { formatDate } from '../utils/dataParser';
 import type { DailyDataPoint } from '../hooks/useFilters';
+import { useIsMobile } from '../hooks/useIsMobile';
 import styles from './RevenueChart.module.css';
-
-function useIsMobile(breakpoint = 768) {
-  const [isMobile, setIsMobile] = useState(
-    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false
-  );
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < breakpoint);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [breakpoint]);
-
-  return isMobile;
-}
 
 interface RevenueChartProps {
   data: DailyDataPoint[];
@@ -100,6 +86,7 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
   const yAxisMax = maxWithGoal > 0 ? maxWithGoal * 1.1 : undefined;
 
   const hasGoalLine = data.some((d) => (d.goal || 0) > 0);
+  const showTooltip = !isMobile;
 
   const chartHeight = isMobile ? 220 : 280;
   const maxIndex = Math.max(chartData.length - 1, 0);
@@ -158,88 +145,90 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
               width={48}
               domain={[yAxisMin, yAxisMax || 'auto']}
             />
-            <Tooltip
-              labelFormatter={formatTooltipLabel}
-              content={({ active, payload, label }) => {
-                if (active && payload && payload.length) {
-                  const currentTotal = payload.find((p) => p.dataKey === 'total')?.value as number | undefined;
-                  const compTotal = payload.find((p) => p.dataKey === 'comparisonTotal')?.value as number | undefined;
-                  const goalEntry = payload.find((p) => p.dataKey === 'goal');
-                  const goalValue = goalEntry ? Number(goalEntry.value) : null;
-                  const delta = currentTotal && compTotal ? ((currentTotal - compTotal) / compTotal) * 100 : null;
-                  const gap = currentTotal && goalValue !== null ? currentTotal - goalValue : null;
+            {showTooltip && (
+              <Tooltip
+                labelFormatter={formatTooltipLabel}
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length) {
+                    const currentTotal = payload.find((p) => p.dataKey === 'total')?.value as number | undefined;
+                    const compTotal = payload.find((p) => p.dataKey === 'comparisonTotal')?.value as number | undefined;
+                    const goalEntry = payload.find((p) => p.dataKey === 'goal');
+                    const goalValue = goalEntry ? Number(goalEntry.value) : null;
+                    const delta = currentTotal && compTotal ? ((currentTotal - compTotal) / compTotal) * 100 : null;
+                    const gap = currentTotal && goalValue !== null ? currentTotal - goalValue : null;
 
-                  const displayLabel = formatTooltipLabel(label);
-                  return (
-                    <div className={styles.tooltip}>
-                      <span className={styles.tooltipDate}>{displayLabel}</span>
-                      <div className={styles.tooltipItems}>
-                        {payload
-                          .filter((entry) => entry.dataKey !== 'comparisonTotal' && entry.dataKey !== 'goal')
-                          .map((entry, index) => (
-                          <div key={index} className={styles.tooltipItem}>
-                            <span
-                              className={styles.tooltipDot}
-                              style={{ background: entry.color }}
-                            />
-                            <span className={styles.tooltipLabel}>
-                              {entry.name === 'total' ? 'Total' : entry.name}
-                            </span>
-                            <span className={styles.tooltipValue}>
-                              {formatBRL(entry.value as number)}
-                            </span>
-                          </div>
-                        ))}
-                        {goalValue !== null && (
-                          <div className={styles.tooltipItem}>
-                            <span
-                              className={styles.tooltipDot}
-                              style={{ background: '#23D8D3' }}
-                            />
-                            <span className={styles.tooltipLabel}>Meta</span>
-                            <span className={styles.tooltipValue}>
-                              {formatBRL(goalValue)}
-                            </span>
-                          </div>
-                        )}
-                        {gap !== null && (
-                          <div className={styles.tooltipItem}>
-                            <span
-                              className={styles.tooltipDot}
-                              style={{ background: gap >= 0 ? 'var(--success)' : 'var(--danger)' }}
-                            />
-                            <span className={styles.tooltipLabel}>Gap</span>
-                            <span className={styles.tooltipValue} style={{ color: gap >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                              {gap >= 0 ? '+' : ''}{formatBRL(gap)}
-                            </span>
-                          </div>
-                        )}
-                        {compTotal != null && (
-                          <div className={styles.tooltipItem}>
-                            <span
-                              className={styles.tooltipDot}
-                              style={{ background: 'var(--ink-faint)' }}
-                            />
-                            <span className={styles.tooltipLabel}>
-                              {comparisonLabel || 'Anterior'}
-                            </span>
-                            <span className={styles.tooltipValue}>
-                              {formatBRL(compTotal)}
-                            </span>
-                          </div>
-                        )}
-                        {delta !== null && (
-                          <div className={styles.tooltipDelta} style={{ color: delta >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                            {delta >= 0 ? '+' : ''}{delta.toFixed(1)}%
-                          </div>
-                        )}
+                    const displayLabel = formatTooltipLabel(label);
+                    return (
+                      <div className={styles.tooltip}>
+                        <span className={styles.tooltipDate}>{displayLabel}</span>
+                        <div className={styles.tooltipItems}>
+                          {payload
+                            .filter((entry) => entry.dataKey !== 'comparisonTotal' && entry.dataKey !== 'goal')
+                            .map((entry, index) => (
+                            <div key={index} className={styles.tooltipItem}>
+                              <span
+                                className={styles.tooltipDot}
+                                style={{ background: entry.color }}
+                              />
+                              <span className={styles.tooltipLabel}>
+                                {entry.name === 'total' ? 'Total' : entry.name}
+                              </span>
+                              <span className={styles.tooltipValue}>
+                                {formatBRL(entry.value as number)}
+                              </span>
+                            </div>
+                          ))}
+                          {goalValue !== null && (
+                            <div className={styles.tooltipItem}>
+                              <span
+                                className={styles.tooltipDot}
+                                style={{ background: '#23D8D3' }}
+                              />
+                              <span className={styles.tooltipLabel}>Meta</span>
+                              <span className={styles.tooltipValue}>
+                                {formatBRL(goalValue)}
+                              </span>
+                            </div>
+                          )}
+                          {gap !== null && (
+                            <div className={styles.tooltipItem}>
+                              <span
+                                className={styles.tooltipDot}
+                                style={{ background: gap >= 0 ? 'var(--success)' : 'var(--danger)' }}
+                              />
+                              <span className={styles.tooltipLabel}>Gap</span>
+                              <span className={styles.tooltipValue} style={{ color: gap >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                                {gap >= 0 ? '+' : ''}{formatBRL(gap)}
+                              </span>
+                            </div>
+                          )}
+                          {compTotal != null && (
+                            <div className={styles.tooltipItem}>
+                              <span
+                                className={styles.tooltipDot}
+                                style={{ background: 'var(--ink-faint)' }}
+                              />
+                              <span className={styles.tooltipLabel}>
+                                {comparisonLabel || 'Anterior'}
+                              </span>
+                              <span className={styles.tooltipValue}>
+                                {formatBRL(compTotal)}
+                              </span>
+                            </div>
+                          )}
+                          {delta !== null && (
+                            <div className={styles.tooltipDelta} style={{ color: delta >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                              {delta >= 0 ? '+' : ''}{delta.toFixed(1)}%
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                }
-                return null;
-              }}
-            />
+                    );
+                  }
+                  return null;
+                }}
+              />
+            )}
             {showMultipleLines && (
               <Legend
                 verticalAlign="top"

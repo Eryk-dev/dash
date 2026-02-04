@@ -1,5 +1,6 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { formatBRL, formatPercent } from '../utils/dataParser';
+import { useIsMobile } from '../hooks/useIsMobile';
 import styles from './SharePieChart.module.css';
 
 interface DataItem {
@@ -24,6 +25,7 @@ const SEGMENT_COLORS = [
 ];
 
 export function SharePieChart({ title, data, showLegend = false, size }: SharePieChartProps) {
+  const isMobile = useIsMobile();
   const total = data.reduce((sum, d) => sum + d.value, 0);
   const chartHeight = size || 160;
   const outerRadius = size ? size * 0.4 : 70;
@@ -66,23 +68,25 @@ export function SharePieChart({ title, data, showLegend = false, size }: SharePi
                   />
                 ))}
               </Pie>
-              <Tooltip
-                content={({ active, payload }) => {
-                  if (active && payload && payload.length) {
-                    const item = payload[0].payload as DataItem;
-                    const percent = (item.value / total) * 100;
-                    return (
-                      <div className={styles.tooltip}>
-                        <span className={styles.tooltipName}>{item.name}</span>
-                        <span className={styles.tooltipValue}>
-                          {formatBRL(item.value)} ({formatPercent(percent)})
-                        </span>
-                      </div>
-                    );
-                  }
-                  return null;
-                }}
-              />
+              {!isMobile && (
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const item = payload[0].payload as DataItem;
+                      const percent = (item.value / total) * 100;
+                      return (
+                        <div className={styles.tooltip}>
+                          <span className={styles.tooltipName}>{item.name}</span>
+                          <span className={styles.tooltipValue}>
+                            {formatBRL(item.value)} ({formatPercent(percent)})
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+              )}
             </PieChart>
           </ResponsiveContainer>
         </div>

@@ -19,6 +19,7 @@ import { DataEntry } from './components/DataEntry';
 import { BreakdownBars } from './components/BreakdownBars';
 import { SharePieChart } from './components/SharePieChart';
 import { RevenueLinesManager } from './components/RevenueLinesManager';
+import { useIsMobile } from './hooks/useIsMobile';
 import { RotateCcw, Settings2 } from 'lucide-react';
 import logo from './assets/logo.svg';
 import styles from './App.module.css';
@@ -32,6 +33,7 @@ function App() {
   const [currentView, setCurrentView] = useState<ViewType>('geral');
   const [showGoalEditor, setShowGoalEditor] = useState(false);
   const [pieMode, setPieMode] = useState<'segmento' | 'grupo' | 'empresa'>('segmento');
+  const isMobile = useIsMobile();
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [showIosHint, setShowIosHint] = useState(false);
 
@@ -249,6 +251,7 @@ function App() {
               options={options.grupos}
               onChange={(v) => toggleFilterValue('grupos', v)}
               onClear={() => updateFilter('grupos', [])}
+              native={isMobile}
             />
             <MultiSelect
               label="Segmento"
@@ -256,6 +259,7 @@ function App() {
               options={options.segmentos}
               onChange={(v) => toggleFilterValue('segmentos', v)}
               onClear={() => updateFilter('segmentos', [])}
+              native={isMobile}
             />
             <MultiSelect
               label="Linha"
@@ -263,6 +267,7 @@ function App() {
               options={options.empresas}
               onChange={(v) => toggleFilterValue('empresas', v)}
               onClear={() => updateFilter('empresas', [])}
+              native={isMobile}
             />
             <div className={styles.filtersDivider} />
             <DatePresets value={datePreset} onChange={setDatePreset} />
@@ -423,6 +428,7 @@ function App() {
               options={options.grupos}
               onChange={(v) => toggleFilterValue('grupos', v)}
               onClear={() => updateFilter('grupos', [])}
+              native={isMobile}
             />
             <MultiSelect
               label="Segmento"
@@ -430,6 +436,7 @@ function App() {
               options={options.segmentos}
               onChange={(v) => toggleFilterValue('segmentos', v)}
               onClear={() => updateFilter('segmentos', [])}
+              native={isMobile}
             />
             <MultiSelect
               label="Linha"
@@ -437,6 +444,7 @@ function App() {
               options={options.empresas}
               onChange={(v) => toggleFilterValue('empresas', v)}
               onClear={() => updateFilter('empresas', [])}
+              native={isMobile}
             />
             <div className={styles.filtersDivider} />
             <DatePresets value={datePreset} onChange={setDatePreset} />

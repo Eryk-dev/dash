@@ -9,6 +9,7 @@ interface MultiSelectProps {
   onChange: (value: string) => void;
   onClear: () => void;
   placeholder?: string;
+  native?: boolean;
 }
 
 export function MultiSelect({
@@ -18,6 +19,7 @@ export function MultiSelect({
   onChange,
   onClear,
   placeholder = 'Todos',
+  native = false,
 }: MultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -51,6 +53,51 @@ export function MultiSelect({
     : values.length === 1
       ? values[0]
       : `${values.length} selecionados`;
+
+  if (native) {
+    return (
+      <div className={styles.container}>
+        <span className={styles.label}>{label}</span>
+        <div className={styles.nativeRow}>
+          <select
+            className={styles.nativeSelect}
+            multiple
+            value={values.length > 0 ? values : ['__ALL__']}
+            onChange={(e) => {
+              const selected = Array.from(e.target.selectedOptions).map((opt) => opt.value);
+              if (selected.includes('__ALL__') || selected.length === 0) {
+                onClear();
+                return;
+              }
+
+              const nextSet = new Set(selected);
+              const currentSet = new Set(values);
+              values.forEach((value) => {
+                if (!nextSet.has(value)) onChange(value);
+              });
+              selected.forEach((value) => {
+                if (!currentSet.has(value)) onChange(value);
+              });
+            }}
+          >
+            <option value="__ALL__">{placeholder}</option>
+            {options.map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+          {values.length > 0 && (
+            <button
+              type="button"
+              className={styles.nativeClear}
+              onClick={onClear}
+            >
+              Limpar
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.container} ref={ref}>

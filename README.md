@@ -1,73 +1,45 @@
-# React + TypeScript + Vite
+# Faturamento Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Dashboard de acompanhamento de faturamento, metas e projeções por **Linha de Receita** (antigo “Empresa”), **Grupo** e **Segmento**. Inclui PWA com instalação e uso offline parcial.
 
-Currently, two official plugins are available:
+## Principais funcionalidades
+- KPIs diários, semanais, mensais e anuais (com referência D‑1 para esperado).
+- Gráficos de ritmo (mensal/acumulado), faturamento diário e contribuição por grupo.
+- Filtros por **Linha**, **Grupo** e **Segmento**.
+- Gestão de **Linhas de Receita** (tela “Linhas”) com inclusão/remoção automática em filtros e metas.
+- PWA instalável (ícone customizado e manifesto configurado).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Rodando localmente
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Build
+```bash
+npm run build
 ```
+
+## PWA / Instalação
+- O botão **Instalar** aparece em produção (HTTPS) quando o navegador dispara `beforeinstallprompt`.
+- No iOS: usar **Compartilhar → Adicionar à Tela de Início**.
+- Em **dev**, o Service Worker é desativado para evitar cache “travado”.
+
+## Dados (Supabase)
+- Tabela: `faturamento`
+- Campos usados: `empresa`, `data` (YYYY‑MM‑DD), `valor`
+
+As credenciais podem ser configuradas via:
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+## Linhas de Receita
+- A lista de linhas é salva em **localStorage**.
+- Ao adicionar uma linha, cria meta anual com 12 meses = 0.
+- Ao remover, ela sai de filtros e metas (dados históricos continuam no banco).
+
+## Fonte única de metas
+Toda a lógica de metas e esperado está documentada em:
+- `REFATORACAO_METAS_E_PWA.md`
+
+Leia antes de alterar cálculos.

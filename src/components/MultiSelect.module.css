@@ -7,6 +7,37 @@
   flex-shrink: 0;
 }
 
+.nativeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.nativeSelect {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--paper);
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+
+.nativeClear {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink-muted);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.nativeClear:hover {
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+
 .label {
   font-size: var(--text-xs);
   color: var(--ink-faint);

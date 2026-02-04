@@ -132,11 +132,13 @@
 .chartWrapperDaily {
   margin: 0 calc(var(--space-2) * -1);
   height: 220px;
+  touch-action: pan-y;
 }
 
 .chartWrapperCumulative {
   margin: 0 calc(var(--space-2) * -1);
   height: 240px;
+  touch-action: pan-y;
 }
 
 .sectionDivider {
