@@ -1,4 +1,4 @@
-const CACHE_NAME = 'faturamento-dashboard-v1';
+const CACHE_NAME = 'faturamento-dashboard-v2';
 const CORE_ASSETS = [
   '/',
   '/index.html',

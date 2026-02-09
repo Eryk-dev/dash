@@ -6,9 +6,38 @@ import App from './App.tsx'
 if ('serviceWorker' in navigator) {
   if (import.meta.env.PROD) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch((err) => {
-        console.error('Service worker registration failed:', err);
-      });
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          const promptUpdate = () => {
+            if (registration.waiting) {
+              registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+            }
+          };
+
+          registration.addEventListener('updatefound', () => {
+            const installing = registration.installing;
+            if (!installing) return;
+            installing.addEventListener('statechange', () => {
+              if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+                promptUpdate();
+              }
+            });
+          });
+
+          if (registration.waiting) {
+            promptUpdate();
+          }
+        })
+        .catch((err) => {
+          console.error('Service worker registration failed:', err);
+        });
+    });
+
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
     });
   } else {
     // In dev, ensure no stale SW/cache interferes with HMR
