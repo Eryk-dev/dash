@@ -1,22 +1,119 @@
-# Faturamento Dashboard - Documentação Técnica
+# Faturamento Dashboard - Documentacao Completa
 
-## Visão Geral
-
-Dashboard de acompanhamento de faturamento para múltiplas empresas organizadas em grupos e segmentos. Permite visualizar receitas, comparar com metas, analisar tendências e entrada manual de dados.
-
-**Stack:** React 19 + TypeScript + Vite + Recharts + date-fns + Lucide Icons + Supabase
+> **Leia este documento ANTES de qualquer alteracao.** Se voce for uma LLM ou dev novo, siga exatamente estas regras.
 
 ---
 
-## Supabase
+## 1. Visao Geral
 
-**Projeto:** 141air
-**Project ID:** `iezxmhrjndzuckjcxihd`
-**Região:** us-east-2
-**Dashboard:** https://supabase.com/dashboard/project/iezxmhrjndzuckjcxihd
+Dashboard de acompanhamento de faturamento para multiplas empresas (chamadas "Linhas de Receita" na UI) organizadas em **Grupos** e **Segmentos**. Permite:
+
+- Visualizar receitas diarias, semanais, mensais e anuais
+- Comparar desempenho real vs metas
+- Analisar tendencias com projecao sazonal
+- Entrada manual de dados via grid
+- Gerenciar linhas de receita e metas
+- Funcionar como PWA instalavel (offline read-only)
+
+---
+
+## 2. Stack Tecnologico
+
+| Camada | Tecnologia | Versao |
+|--------|------------|--------|
+| Framework | React | 19.2.0 |
+| Linguagem | TypeScript | 5.9.3 |
+| Build | Vite | 7.2.4 |
+| Graficos | Recharts | 3.7.0 |
+| Datas | date-fns | 4.1.0 |
+| Icones | lucide-react | 0.563.0 |
+| Backend | Supabase | 2.93.3 |
+| Servidor | Nginx Alpine | - |
+| Container | Docker multi-stage | node:20 + nginx |
+
+**Sem Redux/Zustand** - gerenciamento de estado via React Hooks + localStorage.
+**Sem backend proprio** - SPA pura conectada ao Supabase.
+**Sem autenticacao** - acesso publico via Supabase Anon Key + RLS.
+
+---
+
+## 3. Estrutura do Projeto
+
+```
+dash/
+├── public/
+│   ├── sw.js                         # Service Worker (offline)
+│   ├── manifest.webmanifest          # PWA manifest
+│   ├── pwa-*.png                     # Icones PWA (192, 512, maskable)
+│   ├── apple-touch-icon*.png         # Icones iOS
+│   └── favicon.svg
+├── src/
+│   ├── main.tsx                      # Entry point (React root + SW register)
+│   ├── App.tsx                       # Componente principal (4 views)
+│   ├── App.module.css                # Estilos do App
+│   ├── App.css                       # Estilos globais
+│   ├── index.css                     # CSS variables + reset
+│   ├── types.ts                      # Interfaces TypeScript globais
+│   ├── lib/
+│   │   └── supabase.ts              # Cliente Supabase
+│   ├── hooks/
+│   │   ├── useSupabaseFaturamento.ts # Fetch + realtime do Supabase
+│   │   ├── useFilters.ts            # Motor central de calculos
+│   │   ├── useGoals.ts              # Gestao de metas (localStorage)
+│   │   ├── useRevenueLines.ts       # Gestao de linhas de receita
+│   │   └── useIsMobile.ts           # Deteccao mobile (768px)
+│   ├── data/
+│   │   ├── fallbackData.ts          # 24 empresas (COMPANIES)
+│   │   └── goals.ts                 # Metas anuais 2026 por empresa/mes
+│   ├── utils/
+│   │   ├── goalCalculator.ts        # FONTE UNICA de calculos de metas
+│   │   ├── projectionEngine.ts      # Sazonalidade + forecast
+│   │   └── dataParser.ts            # Formatacao (BRL, %, datas)
+│   ├── components/                   # 21 componentes React
+│   │   ├── ViewToggle.tsx            # Seletor de view (Geral/Metas/Entrada/Linhas)
+│   │   ├── MultiSelect.tsx           # Dropdown multi-select filtros
+│   │   ├── DatePicker.tsx            # Seletor de data
+│   │   ├── DatePresets.tsx           # Presets (Ontem/WTD/MTD/All)
+│   │   ├── ComparisonToggle.tsx      # Toggle comparacao de periodos
+│   │   ├── KPICard.tsx               # Card KPI simples
+│   │   ├── GoalSummary.tsx           # Resumo de meta (barra de progresso)
+│   │   ├── GoalProgress.tsx          # Barra de progresso de meta
+│   │   ├── GoalEditor.tsx            # Modal de edicao de metas
+│   │   ├── GoalsDashboard.tsx        # View Metas principal
+│   │   ├── GoalTable.tsx             # Tabela expansivel de metas
+│   │   ├── PeriodCards.tsx           # Cards Hoje/Semana/Mes/Ano
+│   │   ├── GroupRanking.tsx          # Ranking de grupos
+│   │   ├── RevenueChart.tsx          # Grafico de linha diario
+│   │   ├── GroupStackedBars.tsx      # Barras empilhadas por grupo
+│   │   ├── PaceChart.tsx             # Grafico de ritmo vs meta
+│   │   ├── SharePieChart.tsx         # Pizza (segmento/grupo/empresa)
+│   │   ├── BreakdownBars.tsx         # Barras horizontais rankeadas
+│   │   ├── DataEntry.tsx             # Grid de entrada de dados
+│   │   ├── RevenueLinesManager.tsx   # Gestao de linhas de receita
+│   │   └── Select.tsx                # Dropdown simples
+│   └── assets/
+│       └── logo.svg
+├── index.html                        # HTML entry (SPA)
+├── vite.config.ts                    # Config Vite (React plugin)
+├── tsconfig.json                     # TypeScript config
+├── package.json                      # Dependencias e scripts
+├── Dockerfile                        # Build multi-stage
+├── nginx.conf                        # Config Nginx (SPA + gzip + cache)
+├── CLAUDE.md                         # ESTE DOCUMENTO
+└── REFATORACAO_METAS_E_PWA.md       # Doc da refatoracao de metas
+```
+
+---
+
+## 4. Supabase
+
+### Projeto
+- **Nome:** 141air
+- **ID:** `iezxmhrjndzuckjcxihd`
+- **Regiao:** us-east-2
+- **Dashboard:** https://supabase.com/dashboard/project/iezxmhrjndzuckjcxihd
 
 ### Tabela `faturamento`
-Armazena dados diários de faturamento por empresa.
 
 ```sql
 CREATE TABLE faturamento (
@@ -28,19 +125,144 @@ CREATE TABLE faturamento (
   updated_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(empresa, data)
 );
+-- Indices: idx_faturamento_data, idx_faturamento_empresa
+-- RLS: Habilitado
 ```
 
-**Índices:**
-- `idx_faturamento_data` - busca por data
-- `idx_faturamento_empresa` - busca por empresa
-- `faturamento_empresa_data_key` - constraint unique
+### Variaveis de Ambiente
 
-**RLS:** Habilitado
+```
+VITE_SUPABASE_URL=https://iezxmhrjndzuckjcxihd.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon key embedado em src/lib/supabase.ts>
+```
 
-### Hook: useSupabaseFaturamento
-**Arquivo:** `src/hooks/useSupabaseFaturamento.ts`
+### Operacoes
+
+| Operacao | Metodo | Descricao |
+|----------|--------|-----------|
+| Fetch | `SELECT *` | Busca todos os registros no mount |
+| Upsert | `UPSERT ON CONFLICT(empresa,data)` | Salva/atualiza entrada |
+| Delete | `DELETE WHERE empresa+data` | Remove entrada |
+| Realtime | `postgres_changes` channel | Refetch automatico em qualquer mudanca |
+
+---
+
+## 5. Fluxo de Dados
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                    FONTES DE DADOS                        │
+├──────────────────────────────────────────────────────────┤
+│  Supabase (remoto)           localStorage (local)         │
+│  └─ tabela faturamento       ├─ yearly-goals              │
+│  └─ realtime subscription    └─ revenue-lines             │
+└──────────┬───────────────────────────┬───────────────────┘
+           │                           │
+           ▼                           ▼
+    useSupabaseFaturamento         useGoals + useRevenueLines
+    ├─ data: FaturamentoRecord[]   ├─ yearlyGoals
+    ├─ upsertEntry()               ├─ lines: RevenueLine[]
+    ├─ deleteEntry()               └─ updateYearlyGoals()
+    └─ realtime refetch
+           │
+           │  + yearlyGoals + lines
+           ▼
+       useFilters (MOTOR CENTRAL DE CALCULOS)
+       ├─ Aplica filtros (empresa/grupo/segmento/data)
+       ├─ Calcula KPIs (faturamentoFiltrado, percentual)
+       ├─ Calcula GoalMetrics (dia/semana/mes/ano)
+       ├─ Gera dailyData (com goal por dia)
+       ├─ Gera companyGoalData
+       ├─ Gera breakdowns (empresa/grupo/segmento)
+       └─ Suporta comparacao de periodos
+           │
+           ▼
+       App.tsx (distribui via props)
+       ├── View Geral  → KPIs, graficos, breakdowns
+       ├── View Metas  → PeriodCards, PaceChart, GoalTable
+       ├── View Entrada → DataEntry grid
+       └── View Linhas → RevenueLinesManager
+```
+
+---
+
+## 6. Tipos Principais (`src/types.ts`)
 
 ```typescript
+interface FaturamentoRecord {
+  data: Date;           // Data do registro (noon 12:00 para evitar timezone)
+  empresa: string;      // Nome da linha de receita
+  grupo: string;        // Grupo (NETAIR, ACA, EASY, BELLATOR, UNIQUE)
+  segmento: string;     // Segmento (AR CONDICIONADO, UTILIDADES, BALESTRA, PRESENTES)
+  faturamento: number;  // Valor em R$
+}
+
+interface RevenueLine {
+  empresa: string;
+  grupo: string;
+  segmento: string;
+}
+
+interface Filters {
+  empresas: string[];
+  grupos: string[];
+  segmentos: string[];
+  dataInicio: Date | null;
+  dataFim: Date | null;
+}
+
+interface KPIs {
+  faturamentoFiltrado: number;
+  faturamentoTotal: number;
+  percentualDoTotal: number;
+}
+
+interface GoalMetrics {
+  // Mes
+  metaMensal: number;
+  metaProporcional: number;
+  realizado: number;
+  realizadoMes: number;
+  gapProporcional: number;
+  gapTotal: number;
+  percentualMeta: number;
+  percentualProporcional: number;
+  diasNoMes: number;
+  diaAtual: number;               // D-1 (ontem)
+  // Semana
+  metaSemana: number;
+  realizadoSemana: number;
+  diasNaSemana: number;
+  esperadoSemanal: number;        // Meta esperada ate D-1
+  // Dia
+  metaDia: number;                // Base (metaMensal / diasNoMes)
+  metaDiaAjustada: number;        // Com regra AR CONDICIONADO
+  realizadoDia: number;
+  // Ano
+  metaAno: number;
+  realizadoAno: number;
+  mesesNoAno: number;
+  mesAtual: number;
+  metasMensais: number[];         // 12 meses para graficos
+  // AR CONDICIONADO
+  isArCondicionado: boolean;
+  coverage: { dia, semana, mes, ano: CoverageMetrics };
+}
+```
+
+---
+
+## 7. Hooks
+
+### 7.1 `useSupabaseFaturamento` (`src/hooks/useSupabaseFaturamento.ts`)
+
+Busca dados do Supabase e mantem sincronizado via realtime.
+
+```typescript
+// Entrada
+{ includeZero?: boolean, lines?: RevenueLine[] }
+
+// Saida
 {
   data: FaturamentoRecord[];
   loading: boolean;
@@ -52,449 +274,505 @@ CREATE TABLE faturamento (
 }
 ```
 
-**Funcionalidades:**
-- Fetch inicial de todos os dados
-- Realtime subscription para mudanças
-- Upsert com `ON CONFLICT (empresa, data)`
-- Integração com COMPANIES para grupo/segmento
+**Comportamento:**
+- Fetch inicial no mount
+- Filtra registros por `activeLineSet` (apenas linhas ativas)
+- Mapeia grupo/segmento via `lineMap`
+- Datas normalizadas para noon (12:00) para evitar bugs de timezone
+- Subscribe em `postgres_changes` → refetch completo em qualquer mudanca
 
----
+### 7.2 `useFilters` (`src/hooks/useFilters.ts`)
 
-## Arquitetura
+Motor central de calculos. Recebe dados brutos e retorna tudo calculado.
 
-```
-src/
-├── App.tsx                    # Componente principal com 3 views
-├── types.ts                   # Interfaces TypeScript
-├── main.tsx                   # Entry point
-├── lib/
-│   └── supabase.ts            # Cliente Supabase
-├── hooks/
-│   ├── useSupabaseFaturamento.ts  # Dados do Supabase (principal)
-│   ├── useGoogleSheets.ts     # Fetch de dados CSV (legado)
-│   ├── useLocalEntries.ts     # Merge dados locais (localStorage)
-│   ├── useFilters.ts          # Filtros, KPIs, métricas de metas
-│   └── useGoals.ts            # Gestão de metas anuais
-├── data/
-│   ├── fallbackData.ts        # Lista de empresas (COMPANIES)
-│   └── goals.ts               # Metas anuais por empresa/mês
-├── components/
-│   ├── [Visualização]         # KPICard, RevenueChart, etc.
-│   ├── [Filtros]              # DatePicker, MultiSelect, etc.
-│   └── [Entrada]              # DataEntry, GoalEditor
-└── utils/
-    └── dataParser.ts          # Funções de parse e formatação
-```
-
----
-
-## Fluxo de Dados
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         FONTES DE DADOS                         │
-├─────────────────────────────────────────────────────────────────┤
-│  Google Sheets CSV          localStorage                        │
-│  (VITE_GOOGLE_SHEETS_URL)   (faturamento-entries)               │
-│         │                          │                            │
-│         ▼                          ▼                            │
-│   useGoogleSheets ────────► useLocalEntries                     │
-│   (fetch + polling)         (merge + sync)                      │
-│         │                          │                            │
-│         └──────────┬───────────────┘                            │
-│                    ▼                                            │
-│              data: FaturamentoRecord[]                          │
-│                    │                                            │
-│                    ▼                                            │
-│              useFilters                                         │
-│              - Aplica filtros (empresa, grupo, segmento, data)  │
-│              - Calcula KPIs (faturamentoFiltrado, percentual)   │
-│              - Calcula GoalMetrics (dia, semana, mês, ano)      │
-│              - Gera breakdowns e dados para gráficos            │
-│                    │                                            │
-│                    ▼                                            │
-│               App.tsx                                           │
-│              ┌─────┴─────┐                                      │
-│         ┌────┴────┐ ┌────┴────┐ ┌────┴────┐                     │
-│         │ GERAL   │ │ METAS   │ │ ENTRADA │                     │
-│         └─────────┘ └─────────┘ └─────────┘                     │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Tipos Principais
-
-### FaturamentoRecord
 ```typescript
-interface FaturamentoRecord {
-  data: Date;           // Data do registro
-  empresa: string;      // Nome da empresa
-  grupo: string;        // Grupo (NETAIR, ACA, EASY, BELLATOR, UNIQUE)
-  segmento: string;     // Segmento (AR CONDICIONADO, UTILIDADES, etc.)
-  faturamento: number;  // Valor em R$
-}
-```
+// Entrada
+(data: FaturamentoRecord[], goalHelpers: { yearlyGoals, setSelectedMonth, lines })
 
-### Filters
-```typescript
-interface Filters {
-  empresas: string[];      // Filtro multi-select de empresas
-  grupos: string[];        // Filtro multi-select de grupos
-  segmentos: string[];     // Filtro multi-select de segmentos
-  dataInicio: Date | null; // Data inicial
-  dataFim: Date | null;    // Data final
-}
-```
-
-### GoalMetrics
-```typescript
-interface GoalMetrics {
-  metaMensal: number;           // Meta total do mês
-  metaProporcional: number;     // Meta proporcional até dia atual
-  realizado: number;            // Faturamento realizado no mês
-  gapProporcional: number;      // realizado - metaProporcional
-  gapTotal: number;             // realizado - metaMensal
-  percentualMeta: number;       // % da meta total atingido
-  percentualProporcional: number; // % relativo ao esperado
-  diasNoMes: number;
-  diaAtual: number;
-  // Semana
-  metaSemana: number;
-  realizadoSemana: number;
-  diasNaSemana: number;
-  // Dia (ontem)
-  metaDia: number;
-  realizadoDia: number;
-  // Ano
-  metaAno: number;
-  realizadoAno: number;
-  mesAtual: number;
-}
-```
-
----
-
-## Hooks
-
-### useGoogleSheets
-**Arquivo:** `src/hooks/useGoogleSheets.ts`
-
-Busca dados de faturamento de uma planilha Google Sheets publicada como CSV.
-
-**Configuração:**
-- Variável de ambiente: `VITE_GOOGLE_SHEETS_URL`
-- Polling: 5 minutos
-- Fallback para dados locais em caso de erro
-
-**Retorna:**
-```typescript
+// Saida
 {
-  data: FaturamentoRecord[];
-  loading: boolean;
-  isConnected: boolean;
-  lastUpdated: Date | null;
-  refresh: () => Promise<void>;
+  filters, options, kpis, goalMetrics,
+  companyGoalData, dailyData, comparisonDailyData, comparisonLabel,
+  comparisonEnabled, customComparisonStart, customComparisonEnd,
+  getGoalForDate, chartCompanies, allGroupsInData,
+  groupBreakdown, segmentBreakdown, empresaBreakdown, segmentPieData,
+  datePreset,
+  updateFilter, toggleFilterValue, setDatePreset, clearFilters,
+  hasActiveFilters, toggleComparison, setCustomComparisonRange, clearCustomComparison,
 }
 ```
-
-### useLocalEntries
-**Arquivo:** `src/hooks/useLocalEntries.ts`
-
-Mescla entradas manuais do localStorage com dados do Google Sheets.
-
-**Storage key:** `faturamento-entries`
-**Formato:** `{ "empresa:YYYY-MM-DD": number }`
-
-**Eventos:**
-- `storage` - sincroniza entre abas
-- `localEntriesUpdated` - evento custom para mesma aba
-
-### useFilters
-**Arquivo:** `src/hooks/useFilters.ts`
-
-Hook central que gerencia toda a lógica de filtros, cálculos e transformações.
 
 **Date Presets:**
 - `yesterday` - dia anterior
-- `wtd` - Week to Date (semana até hoje)
-- `mtd` - Month to Date (mês até hoje)
-- `all` - período completo
+- `wtd` - Week to Date (semana ate hoje)
+- `mtd` - Month to Date (mes ate hoje) **[default]**
+- `all` - periodo completo
 
-**Outputs principais:**
-- `filteredData` - dados filtrados
-- `kpis` - faturamentoFiltrado, percentualDoTotal
-- `goalMetrics` - métricas de metas
-- `dailyData` - dados agrupados por dia (para gráficos)
-- `comparisonDailyData` - dados do período de comparação
-- Breakdowns: `groupBreakdown`, `segmentBreakdown`, `empresaBreakdown`
-- Pie data: `segmentPieData`
+**dailyData:** Cada ponto ja contem `goal` calculado. Componentes NAO devem recalcular.
 
-**Comparação de Períodos:**
-Quando habilitado, compara período atual com período anterior de mesma duração.
+### 7.3 `useGoals` (`src/hooks/useGoals.ts`)
 
-### useGoals
-**Arquivo:** `src/hooks/useGoals.ts`
+Gerencia metas anuais persistidas em localStorage.
 
-Gerencia metas anuais por empresa/mês.
-
-**Storage key:** `faturamento-dashboard-yearly-goals`
-
-**Funções:**
-- `getCompanyGoal(empresa, month?)` - meta de uma empresa
-- `getGroupGoal(grupo, month?)` - meta somada do grupo
-- `updateGoalForMonth(empresa, month, value)` - atualiza meta
-- `resetGoals()` - volta aos valores default
-
----
-
-## Views (App.tsx)
-
-### 1. View Geral (`currentView === 'geral'`)
-
-Visão principal com KPIs, gráficos e breakdowns.
-
-**Componentes:**
-- **Filtros:** MultiSelect (Grupo, Segmento, Empresa), DatePicker, DatePresets, ComparisonToggle
-- **KPIs:** Faturamento filtrado, % do Total
-- **GoalSummary:** Progresso da meta mensal/semanal/diária
-- **RevenueChart:** Gráfico de linha do faturamento diário
-- **SharePieChart:** Pizza por segmento
-- **GroupStackedBars:** Barras empilhadas por grupo/dia
-- **BreakdownBars:** Rankings por Empresa, Grupo, Segmento
-
-### 2. View Metas (`currentView === 'metas'`)
-
-Acompanhamento detalhado de metas por empresa e grupo.
-
-**Componentes:**
-- **Filtros:** Grupo, Segmento, Empresa, DatePresets
-- **PeriodCards:** Cards de Hoje, Semana, Mês, Ano
-- **PaceChart:** Gráfico de ritmo vs meta linear
-- **GroupRanking:** Ranking de grupos por performance
-- **Detalhamento:** Lista expansível de grupos → empresas
-
-**Status de Meta:**
-- `ahead` - acima da meta proporcional (+5%)
-- `on-track` - dentro da tolerância (±5%)
-- `behind` - abaixo da meta proporcional (-5%)
-
-### 3. View Entrada (`currentView === 'entrada'`)
-
-Entrada manual de dados de faturamento.
-
-**Componentes:**
-- **DataEntry:** Grid de entrada por empresa × dias
-
-**Funcionalidades:**
-- Presets: Ontem, Semana, Mês
-- Navegação: ← → entre períodos
-- Range personalizado (máx 90 dias)
-- Auto-save em localStorage
-- Navegação por Tab/Enter
-- Indicadores visuais: ✓ salvo, ! abaixo meta
-
-**Comportamento por dia da semana:**
-- Segunda: mostra Sex, Sáb, Dom
-- Domingo: mostra Sábado
-- Outros: mostra Segunda até ontem
-
----
-
-## Componentes de Visualização
-
-### KPICard
-Card simples com label e valor formatado.
-
-### GoalSummary
-Mostra progresso da meta com:
-- Barra de progresso (realizado/meta)
-- Gap em R$ (positivo/negativo)
-- Percentuais
-
-### RevenueChart
-Gráfico de linha com Recharts:
-- Múltiplas linhas por empresa (quando filtrado)
-- Linha de comparação pontilhada
-- ReferenceLine para meta diária
-- Tooltip com valores e delta %
-
-### GroupStackedBars
-Barras empilhadas por grupo/dia:
-- Cores por grupo
-- Hover mostra valores
-- Linha de meta diária
-
-### SharePieChart
-Pizza com legenda para distribuição por segmento.
-
-### BreakdownBars
-Barras horizontais rankeadas com limite de itens.
-
-### PaceChart
-Gráfico de área mostrando:
-- Realizado acumulado
-- Meta linear (linha pontilhada)
-- Projeção futura
-
----
-
-## Dados de Metas (goals.ts)
-
-### Estrutura
 ```typescript
-interface CompanyYearlyGoal {
-  empresa: string;
-  grupo: string;
-  metas: { [month: number]: number }; // 1-12 para Jan-Dez
+// Storage: 'faturamento-dashboard-yearly-goals'
+// Default: DEFAULT_YEARLY_GOALS (src/data/goals.ts)
+
+{
+  yearlyGoals: CompanyYearlyGoal[];
+  goals: CompanyGoal[];              // Para o mes selecionado
+  totalGoal: number;
+  totalYearGoal: number;
+  selectedMonth: number;             // 1-12
+  updateYearlyGoals, updateGoalForMonth, resetGoals,
+  getCompanyGoal, getGroupGoal, setSelectedMonth,
 }
 ```
 
-### Empresas Cadastradas
+### 7.4 `useRevenueLines` (`src/hooks/useRevenueLines.ts`)
 
-**NETAIR (8 empresas):**
-NETAIR, NETPARTS, 141AIR, SHOPEE NETAIR, VITAO, VINICIUS, ARTHUR, JONATHAN
+Gerencia lista de linhas de receita (empresas).
 
-**ACA (3 empresas):**
-AUTOFY (CONDENSADORES ), AUTOMY, SHOPEE ACA
+```typescript
+// Storage: 'faturamento-dashboard-revenue-lines'
+// Default: COMPANIES (src/data/fallbackData.ts)
 
-**EASY (3 empresas):**
-EASYPEASY SP, EASYPEASY CWB, SHOPEE EASY
+{
+  lines: RevenueLine[];
+  lineMap: Map<string, RevenueLine>;
+  addLine, updateLine, removeLine, setLines,
+}
+```
 
-**BELLATOR (3 empresas):**
-BELLATOR CWB, BELLATOR - JUNIOR, BELLATOR - SITE
+**Regras:**
+- Adicionar linha → entra nos filtros imediatamente
+- Remover linha → sai dos filtros, meta removida, dados historicos permanecem no banco
+- Sincroniza com `yearlyGoals`: se existe meta sem linha, cria linha automaticamente
 
-**UNIQUE (7 empresas):**
-ML 1 - UNIQUE, ML 2 - UNIQUE, UNIQUEKIDS, UNIQUEBOX, MANU, REPRESENTANTES, SITE TERCEIROS
+### 7.5 `useIsMobile` (`src/hooks/useIsMobile.ts`)
+
+Retorna `boolean` para breakpoint de 768px.
 
 ---
 
-## Parser de Dados (dataParser.ts)
+## 8. Views (4 telas)
 
-### Funções
+### 8.1 View "Geral" (default)
 
-**parseBRLCurrency(value: string): number**
-```
-"R$ 20.715,00" → 20715.00
-```
+Visao principal com KPIs, graficos e breakdowns.
 
-**parseBRDate(dateStr: string): Date**
-```
-"01/02/2026" → Date
-```
+**Componentes:**
+| Componente | Funcao |
+|------------|--------|
+| MultiSelect (x3) | Filtros: Grupo, Segmento, Linha |
+| DatePresets | Yesterday, WTD, MTD, All |
+| DatePicker (x2) | Data inicio/fim customizada |
+| ComparisonToggle | Liga/desliga comparacao de periodos |
+| KPICard (x2) | Faturamento filtrado, % do total |
+| GoalSummary | Progresso da meta (barra + gap + %) |
+| RevenueChart | Grafico de linha diario (+ comparacao) |
+| SharePieChart | Pizza por segmento/grupo/empresa |
+| GroupStackedBars | Barras empilhadas por grupo/dia |
+| BreakdownBars (x3) | Rankings: Por Linha, Por Grupo, Por Segmento |
 
-**parseCSVData(csvText: string): FaturamentoRecord[]**
-Espera CSV com colunas: data, empresa, grupo, segmento, faturamento
+### 8.2 View "Metas"
 
-**formatBRL(value: number): string**
-```
-20715 → "R$ 20.715,00"
-```
+Acompanhamento detalhado de metas.
 
-**formatPercent(value: number): string**
-```
-85.5 → "85.5%"
+**Componentes:**
+| Componente | Funcao |
+|------------|--------|
+| Filtros | Grupo, Segmento, Empresa (sem date pickers) |
+| PeriodCards | Cards: Hoje, Semana, Mes, Ano |
+| PaceChart | Ritmo acumulado vs meta linear |
+| GroupRanking | Ranking de grupos por performance |
+| GoalTable | Tabela expansivel grupo → empresas |
+
+**Status de meta:**
+- `ahead` (verde): gap > +5% do esperado
+- `on-track` (amarelo): gap entre -5% e +5%
+- `behind` (vermelho): gap < -5% do esperado
+
+### 8.3 View "Entrada"
+
+Grid de entrada manual de dados.
+
+**DataEntry:**
+- Grid: Empresas (linhas) x Dias (colunas)
+- Navegacao mensal com setas ← →
+- Presets: Ontem, Semana Passada, Mes Passado
+- Auto-save via upsert no Supabase
+- Indicadores: ✓ (salvo), ! (abaixo da meta)
+- Navegacao por Tab/Enter entre celulas
+
+### 8.4 View "Linhas"
+
+Gerenciamento de linhas de receita.
+
+**RevenueLinesManager:**
+- Adicionar nova linha (nome, grupo, segmento)
+- Editar grupo/segmento de uma linha
+- Remover linha (cascata para filtros e metas)
+- Validacao de formulario
+
+---
+
+## 9. Fonte Unica de Verdade: `goalCalculator.ts`
+
+**ARQUIVO MAIS IMPORTANTE DO SISTEMA.** Todos os calculos de metas passam por aqui.
+
+### Funcoes
+
+```typescript
+// Constroi lista de empresas com segmento
+buildCompanyMetaInfo(yearlyGoals, lines) → CompanyMetaInfo[]
+
+// Filtra empresas pelos filtros ativos
+filterCompaniesByFilters(companies, filters) → CompanyMetaInfo[]
+
+// Fator de ajuste por segmento + dia da semana
+getAdjustmentFactor(segmento, date) → number
+// AR CONDICIONADO: dia util=1.2, fds=0.5
+// Outros: sempre 1.0
+
+// Meta diaria base = metaMensal / diasNoMes
+getCompanyDailyBaseGoal(company, date) → number
+
+// Meta diaria ajustada (aplica adjustment factor)
+getCompanyAdjustedDailyGoal(company, date) → number
+
+// Soma meta diaria ajustada de todas as empresas
+getTotalAdjustedDailyGoal(companies, date) → number
+
+// Soma meta diaria base de todas as empresas
+getTotalBaseDailyGoal(companies, date) → number
+
+// Soma meta mensal de todas as empresas
+getTotalMonthlyGoal(companies, month) → number
+
+// Soma meta anual de todas as empresas
+getTotalYearlyGoal(companies) → number
+
+// Soma metas diarias ajustadas num range de datas
+sumAdjustedDailyGoalsForRange(companies, start, end) → number
+
+// Mapa date→goal para graficos
+buildDailyGoalMap(companies, dates) → Map<string, number>
+
+// Meta ajustada de uma empresa especifica para uma data
+getCompanyAdjustedDailyGoalForDate(companies, empresa, date) → number
 ```
 
 ---
 
-## Configuração
+## 10. Motor de Projecao: `projectionEngine.ts`
 
-### Variáveis de Ambiente (.env)
+Analise de sazonalidade e previsao com quantis.
+
+### Sazonalidade
+
+```typescript
+interface SeasonalityFactors {
+  weekday: number[];       // 7 fatores (Seg=0, Dom=6)
+  month: number[];         // 12 fatores (Jan=0, Dez=11)
+  monthPosition: number[]; // 6 bins de posicao dentro do mes
+  sampleSize: number;
+}
 ```
-VITE_GOOGLE_SHEETS_URL=https://docs.google.com/spreadsheets/.../pub?output=csv
+
+**Calculo:**
+1. Filtra valores > 0
+2. Calcula log dos valores
+3. Remove outliers via Z-score mediano (MAD) com threshold 3.5
+4. Calcula media por dia-da-semana, mes e posicao-no-mes
+5. Normaliza pela media geral
+6. Clamp entre 0.3 e 3.0
+
+### Forecast
+
+```typescript
+interface ForecastModel {
+  baseline: number;           // EWMA (Exponentially Weighted Moving Average)
+  alpha: number;              // 0.1 (normal) ou 0.25 (trend confirmado)
+  quantiles: { p10, p50, p90 };
+  confidence: number;         // 0.1 a 0.95
+  trendConfirmed: boolean;
+  forecastForDate: (date: Date) => { p10, p50, p90 };
+}
 ```
 
-### localStorage Keys
-- `faturamento-entries` - Entradas manuais de faturamento
-- `faturamento-dashboard-yearly-goals` - Metas editadas pelo usuário
+**Processo:**
+1. Dessazonaliza valores historicos
+2. Remove outliers (Z-score > 3.5 no log)
+3. Detecta tendencia (ultimos 3 meses crescentes 25%+)
+4. Calcula EWMA com alpha adaptativo
+5. Calcula residuos ponderados por recencia (half-life 120 dias)
+6. Quantis p10/p50/p90 via weighted quantile
+7. Confianca = f(cobertura_30d, estabilidade_residuos)
+
+### Hierarquia
+
+```typescript
+// Blenda fatores company → group → total com shrinkage
+calculateCompanySeasonality(records) → SeasonalityHierarchy
+getSeasonalityForEntity(hierarchy, empresa?, grupo?) → SeasonalityFactors
+```
 
 ---
 
-## Fluxo de Atualização de Dados
+## 11. Empresas e Metas
 
-1. **Google Sheets → Dashboard**
-   - Polling automático a cada 5 minutos
-   - Botão refresh manual
-   - Indicador de conexão no header
+### 24 Linhas de Receita
 
-2. **Entrada Manual → Dashboard**
-   - DataEntry salva em localStorage
-   - Evento `localEntriesUpdated` dispara re-render
-   - useLocalEntries faz merge com dados do Sheets
+| Grupo | Empresa | Segmento |
+|-------|---------|----------|
+| NETAIR | NETAIR | AR CONDICIONADO |
+| NETAIR | NETPARTS | AR CONDICIONADO |
+| NETAIR | 141AIR | AR CONDICIONADO |
+| NETAIR | SHOPEE NETAIR | AR CONDICIONADO |
+| NETAIR | VITAO | AR CONDICIONADO |
+| NETAIR | VINICIUS | AR CONDICIONADO |
+| NETAIR | ARTHUR | AR CONDICIONADO |
+| NETAIR | JONATHAN | AR CONDICIONADO |
+| ACA | AUTOFY (CONDENSADORES ) | AR CONDICIONADO |
+| ACA | AUTOMY | AR CONDICIONADO |
+| ACA | SHOPEE ACA | AR CONDICIONADO |
+| EASY | EASYPEASY SP | UTILIDADES |
+| EASY | EASYPEASY CWB | UTILIDADES |
+| EASY | SHOPEE EASY | UTILIDADES |
+| BELLATOR | BELLATOR CWB | BALESTRA |
+| BELLATOR | BELLATOR - JUNIOR | BALESTRA |
+| BELLATOR | BELLATOR - SITE | BALESTRA |
+| UNIQUE | ML 1 - UNIQUE | PRESENTES |
+| UNIQUE | ML 2 - UNIQUE | PRESENTES |
+| UNIQUE | UNIQUEKIDS | PRESENTES |
+| UNIQUE | UNIQUEBOX | PRESENTES |
+| UNIQUE | MANU | PRESENTES |
+| UNIQUE | REPRESENTANTES | PRESENTES |
+| UNIQUE | SITE TERCEIROS | PRESENTES |
 
-3. **Metas → Dashboard**
-   - GoalEditor atualiza metas
-   - Salva em localStorage
-   - useGoals recalcula totais
+### Segmentos
+
+| Segmento | Grupos | Regra Especial |
+|----------|--------|----------------|
+| AR CONDICIONADO | NETAIR, ACA | Meta ajustada: dia util=120%, fds=50% |
+| UTILIDADES | EASY | Sem ajuste |
+| BALESTRA | BELLATOR | Sem ajuste |
+| PRESENTES | UNIQUE | Sem ajuste |
+
+### Metas 2026
+
+Definidas em `src/data/goals.ts` (DEFAULT_YEARLY_GOALS). Cada empresa tem metas mensais diferenciadas. Valores vem da planilha "metas 2026 lever (3).xlsx".
 
 ---
 
-## Responsividade
+## 12. Regras de Negocio FIXAS (NAO MUDAR)
 
-- Mobile: < 768px
-- Gráficos ajustam altura
-- Labels simplificados
-- Grid columns adaptativo
+### 12.1 Referencia D-1 (ontem)
 
----
-
-## Observações de Implementação
-
-1. **Datas:** Sempre usar noon (12:00) para evitar problemas de timezone
-2. **Merge de dados:** localStorage tem prioridade sobre Google Sheets
-3. **Comparação:** Alinha por índice (dia 0 = dia 0), não por data
-4. **Metas:** Proporcional = (metaMensal / diasNoMes) × diaAtual
-5. **Status:** Tolerância de ±5% da meta proporcional
-
----
-
-## Lógica de Indicadores de Meta (D-1)
-
-Todos os indicadores de "onde deveríamos estar" usam **D-1 (ontem)** como referência, pois o faturamento só pode ser fechado no dia seguinte (D+1).
-
-### Resumo dos Indicadores
+Todos os indicadores de "esperado" usam **D-1 (ontem)** como referencia.
+Motivo: faturamento so pode ser fechado no dia seguinte (D+1).
 
 | Indicador | Meta | Esperado | Realizado |
 |-----------|------|----------|-----------|
-| **Diário** | 1 dia | - | D-1 |
-| **Semanal** | 7 dias | dias até D-1 | semana até D-1 |
-| **Mensal** | mês inteiro | dia D-1 | mês até D-1 |
-| **Anual** | ano inteiro | mês D-1 | ano até D-1 |
+| Diario | metaDiaAjustada de D-1 | - | faturamento de D-1 |
+| Semanal | soma ajustada Seg-Dom | soma ajustada Seg ate D-1 | faturamento Seg ate D-1 |
+| Mensal | soma ajustada do mes | soma ajustada dia 1 ate D-1 | faturamento dia 1 ate D-1 |
+| Anual | soma 12 meses | proporcional ate mes D-1 | faturamento Jan ate D-1 |
 
-### Variáveis de Referência (useFilters.ts)
-```typescript
-const yesterday = new Date(today);
-yesterday.setDate(yesterday.getDate() - 1);
+### 12.2 Segmento = soma das empresas
 
-const diaAtual = yesterday.getDate();        // Dia de D-1
-const refMonth = yesterday.getMonth() + 1;   // Mês de D-1
-const refYear = yesterday.getFullYear();     // Ano de D-1
-const diasNaSemana = /* dias desde segunda até D-1 */;
+Ao filtrar por segmento, metas sao **soma direta das empresas** do segmento.
+**NAO** usar proporcao historica do faturamento.
+
+### 12.3 AR CONDICIONADO ajusta por empresa
+
+O ajuste de fds vem da soma individual das metas ajustadas.
+**NAO** usar ponderacao por participacao do faturamento.
+
+### 12.4 Esperado semanal
+
+- `esperadoSemanal` = soma metas ajustadas de **segunda ate D-1**
+- `metaSemana` = soma metas ajustadas da semana completa (Seg-Dom)
+
+### 12.5 PaceChart (ritmo anual)
+
+Em `datePreset === 'all'`, a meta mensal varia por mes (soma das metas das empresas filtradas).
+**NAO** usar media fixa (metaAno/12).
+
+---
+
+## 13. Componentes de Visualizacao
+
+### RevenueChart (grafico de linha)
+- **Fonte:** `dailyData.goal` (NAO recalcula meta)
+- Eixo X: indice sequencial (uso total da largura mobile)
+- Eixo Y: `[0, max(faturamento, metaDiaria) * 1.1]`
+- Suporta linhas de comparacao (periodo anterior, pontilhada)
+- ReferenceLine horizontal para meta diaria
+
+### GroupStackedBars (barras empilhadas)
+- **Fonte:** `dailyData.goal` (NAO recalcula meta)
+- Cores por grupo
+- Tooltip com valores por grupo
+- Linha de referencia para meta diaria
+
+### SharePieChart (pizza)
+- Switchable: Segmento / Grupo / Empresa
+- Legenda lateral com percentuais
+
+### PaceChart (ritmo)
+- Area acumulada: realizado
+- Linha pontilhada: meta linear acumulada
+- Projecao futura via `projectionEngine`
+- No preset "All": mostra ritmo do ano inteiro com meta variavel por mes
+
+### BreakdownBars (ranking horizontal)
+- 3 instancias: Por Linha, Por Grupo, Por Segmento
+- Ordenado por valor decrescente
+- Limite de itens exibidos
+
+### PeriodCards
+- 4 cards: Hoje, Semana, Mes, Ano
+- Cada um mostra: realizado, meta, gap, %
+
+---
+
+## 14. Estilizacao
+
+### CSS Architecture
+- **CSS Modules** para escopo por componente (`.module.css`)
+- **CSS Variables** globais em `src/index.css`
+- **Sem Tailwind** - CSS manual com design tokens
+
+### Design Tokens
+
+```css
+/* Cores */
+--ink: #1a1a1a;           /* Texto */
+--paper: #ffffff;          /* Fundo */
+--positive: #23D8D3;       /* Teal (brand) */
+--attention: #d97706;      /* Amber */
+--success: #10b981;        /* Verde */
+--danger: #ef4444;         /* Vermelho */
+--warning: #f59e0b;        /* Laranja */
+
+/* Espacamento: --space-1 a --space-16 (base 4px) */
+/* Tipografia: --text-xs a --text-4xl */
+/* Fonte: Inter (Google Fonts) */
 ```
 
-### Meta Semanal
-- `metaSemana = metaDia × 7` (semana completa)
-- `esperado = (metaSemana / 7) × diasNaSemana`
-- `realizadoSemana` = soma de segunda até D-1
+### Responsividade
+- Breakpoint mobile: **768px** (via `useIsMobile`)
+- Mobile: filtros em overlays, layout vertical, tooltips desativados
+- Desktop: layout em grid, dropdowns inline
 
-### Meta por Segmento
-Quando há filtro de segmento (sem filtro de empresas/grupos), a meta é proporcionalizada:
+---
+
+## 15. PWA (Progressive Web App)
+
+### Arquivos
+- `public/manifest.webmanifest` - Configuracao da PWA
+- `public/sw.js` - Service Worker
+
+### Service Worker - Estrategias de Cache
+- **HTML:** Network-first (fallback para cached shell)
+- **Assets estaticos (JS/CSS/imagens):** Cache-first
+- **Google Fonts:** Cache-first com runtime cache
+- **Cache version:** `faturamento-dashboard-v1`
+
+### Registro (src/main.tsx)
+- **Producao:** Registra `sw.js`
+- **Dev:** Desativa SW e limpa cache (evita "versao travada")
+
+### Instalacao
+- Botao "Instalar" aparece em `beforeinstallprompt`
+- iOS: hint "Compartilhar → Adicionar a Tela"
+
+---
+
+## 16. Build e Deploy
+
+### Scripts
+
+```bash
+npm run dev      # Vite dev server
+npm run build    # tsc -b && vite build → dist/
+npm run lint     # ESLint
+npm run preview  # Vite preview de dist/
+```
+
+### Docker
+
+```dockerfile
+# Stage 1: Build
+FROM node:20-alpine AS build
+RUN npm ci && npm run build
+
+# Stage 2: Serve
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+```
+
+### Nginx
+- Gzip: text, css, json, js, xml
+- Cache estatico: 1 ano (immutable)
+- SPA fallback: `try_files $uri $uri/ /index.html`
+- Headers: X-Frame-Options SAMEORIGIN, X-Content-Type-Options nosniff
+- Manifest: `application/manifest+json`
+
+---
+
+## 17. localStorage Keys
+
+| Key | Conteudo | Default |
+|-----|----------|---------|
+| `faturamento-dashboard-yearly-goals` | Metas anuais editadas | `DEFAULT_YEARLY_GOALS` |
+| `faturamento-dashboard-revenue-lines` | Lista de linhas de receita | `COMPANIES` |
+
+---
+
+## 18. Utilitarios (`src/utils/dataParser.ts`)
+
 ```typescript
-segmentProportion = receita_segmento / receita_total;
-metaAjustada = metaBase × segmentProportion;
+formatBRL(20715)         → "R$ 20.715,00"
+formatPercent(85.5)      → "85.5%"
+formatDate(date)         → "02/09"
+formatDateInput(date)    → "2026-02-09"
+parseBRLCurrency("R$ 20.715,00") → 20715
+parseBRDate("01/02/2026")        → Date
+parseCSVData(csvText)             → FaturamentoRecord[]
 ```
 
 ---
 
-## Gráfico RevenueChart
+## 19. Checklist Antes de Modificar
 
-### Eixo Y
-- Sempre começa do zero
-- Limite superior = `max(faturamento, metaDiária) × 1.1`
+- [ ] A mudanca usa funcoes do `goalCalculator.ts`?
+- [ ] O valor esperado referencia **D-1**?
+- [ ] Segmento e calculado como **soma de empresas** (nao proporcao)?
+- [ ] Graficos usam `dailyData.goal` sem recalcular?
+- [ ] Entrada usa meta diaria **ajustada** por dia util/fds?
+- [ ] Datas sao normalizadas para noon (12:00)?
 
-```typescript
-const yAxisMin = 0;
-const maxWithGoal = dailyGoal > 0 ? Math.max(maxDataValue, dailyGoal) : maxDataValue;
-const yAxisMax = maxWithGoal > 0 ? maxWithGoal * 1.1 : undefined;
-```
+Se alguma resposta for **NAO**, pare e revise.
+
+---
+
+## 20. Instrucoes para LLMs / Devs
+
+**NUNCA:**
+- Criar novos calculos de meta fora de `goalCalculator.ts`
+- Proporcionalizar meta de segmento por share de faturamento
+- Usar "hoje" em vez de D-1 nos esperados
+- Ajustar meta diaria com base na participacao do faturamento
+- Recalcular meta diaria nos componentes de grafico
+
+**SEMPRE:**
+- Usar funcoes do `goalCalculator.ts`
+- Passar metas ja prontas do `useFilters`
+- Normalizar datas para noon (12:00)
+- Consultar este documento antes de alterar KPIs ou graficos
+- Manter CSS Modules para novos componentes

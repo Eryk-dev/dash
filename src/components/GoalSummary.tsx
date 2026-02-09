@@ -96,11 +96,12 @@ export function GoalSummary({
   if (meta === 0) return null;
 
   // Determine which levels to show based on datePreset
-  // Ontem: Diária → Semana
+  // Hoje/Ontem: Diária → Semana
   // Semana: Semana → Mês
   // Mês/Tudo: Mês → Ano
-  const isYesterday = datePreset === 'yesterday';
+  const isDaily = datePreset === 'today' || datePreset === 'yesterday';
   const isWeek = datePreset === 'wtd';
+  const isMonth = datePreset === 'mtd';
   const isMonthOrAll = datePreset === 'mtd' || datePreset === 'all';
 
   // Expected value for year (proportional to current month)
@@ -108,8 +109,8 @@ export function GoalSummary({
 
   return (
     <div className={styles.container}>
-      {/* Ontem: Diária → Semanal */}
-      {isYesterday && (
+      {/* Hoje/Ontem: Diária → Semanal */}
+      {isDaily && (
         <>
           <ProgressBar
             label="Meta Diária"
@@ -151,6 +152,16 @@ export function GoalSummary({
       {/* Mensal/Tudo: Mensal/Período → Anual */}
       {isMonthOrAll && (
         <>
+          {isMonth && (
+            <>
+              <ProgressBar
+                label="Meta Diária"
+                realizado={realizadoDia}
+                meta={metaDiaAjustada}
+              />
+              <div className={styles.divider} />
+            </>
+          )}
           <ProgressBar
             label={datePreset === 'all' ? "Meta do Período" : "Meta Mensal"}
             realizado={datePreset === 'all' ? realizado : realizadoMes}

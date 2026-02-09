@@ -6,8 +6,9 @@
 
 .header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: var(--space-3);
 }
 
 .title {
@@ -15,6 +16,46 @@
   color: var(--ink-faint);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.indicators {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  width: min(780px, 100%);
+}
+
+.indicatorItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.indicatorLabel {
+  font-size: 10px;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.indicatorValue {
+  font-size: var(--text-xs);
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.indicatorPositive {
+  color: var(--success);
+}
+
+.indicatorNegative {
+  color: var(--danger);
 }
 
 .chart {
@@ -99,12 +140,26 @@
     gap: var(--space-3);
   }
 
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .indicators {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
   .empty {
     height: 200px;
   }
 }
 
 @media (max-width: 480px) {
+  .indicators {
+    grid-template-columns: 1fr;
+  }
+
   .tooltip {
     padding: var(--space-2);
     min-width: 120px;

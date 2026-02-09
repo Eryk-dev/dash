@@ -89,9 +89,11 @@ function Card({ label, realizado, meta, metaProporcional, coverage, showPercent,
 }
 
 export function PeriodCards({ hoje, semana, mes, ano, activePreset }: PeriodCardsProps) {
+  const dailyLabel = activePreset === 'yesterday' ? 'Ontem' : 'Hoje';
+
   return (
     <div className={styles.container}>
-      <Card label="Ontem" {...hoje} isActive={activePreset === 'yesterday'} />
+      <Card label={dailyLabel} {...hoje} isActive={activePreset === 'today' || activePreset === 'yesterday'} />
       <Card label="Semana" {...semana} isActive={activePreset === 'wtd'} />
       <Card label="Mês" {...mes} showPercent isActive={activePreset === 'mtd' || activePreset === 'all'} />
       {ano && <Card label="Ano" {...ano} showPercent />}

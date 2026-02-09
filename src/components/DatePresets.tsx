@@ -7,6 +7,7 @@ interface DatePresetsProps {
 }
 
 const presets: { value: DatePreset; label: string }[] = [
+  { value: 'today', label: 'Hoje' },
   { value: 'yesterday', label: 'Ontem' },
   { value: 'wtd', label: 'Semana' },
   { value: 'mtd', label: 'Mês' },

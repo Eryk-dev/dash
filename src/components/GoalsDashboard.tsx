@@ -27,7 +27,7 @@ interface CompanyGoalData {
 
 interface DailyDataPoint {
   date: Date;
-  total: number;
+  total: number | null;
   empresa?: string;
   grupo?: string;
 }
@@ -237,6 +237,14 @@ export function GoalsDashboard({
     );
   }, [seasonalityHierarchy, selectedEntity]);
 
+  const latestRealizedDate = useMemo(() => {
+    const realizedDates = dailyData
+      .filter((d) => typeof d.total === 'number')
+      .map((d) => d.date);
+    if (realizedDates.length === 0) return null;
+    return realizedDates.reduce((latest, d) => (d > latest ? d : latest), realizedDates[0]);
+  }, [dailyData]);
+
   return (
     <div className={styles.container}>
       {/* Period Cards */}
@@ -263,11 +271,11 @@ export function GoalsDashboard({
             diaAtual={diaAtual}
             getGoalForDate={getGoalForDate}
             datePreset={datePreset}
-            mesReferencia={dailyData.length > 0
-              ? dailyData.reduce((latest, d) => d.date > latest ? d.date : latest, dailyData[0].date).getMonth() + 1
+            mesReferencia={latestRealizedDate
+              ? latestRealizedDate.getMonth() + 1
               : new Date().getMonth() + 1}
-            anoReferencia={dailyData.length > 0
-              ? dailyData.reduce((latest, d) => d.date > latest ? d.date : latest, dailyData[0].date).getFullYear()
+            anoReferencia={latestRealizedDate
+              ? latestRealizedDate.getFullYear()
               : new Date().getFullYear()}
             seasonalityFactors={entitySeasonality}
           />

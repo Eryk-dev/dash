@@ -42,21 +42,21 @@ export interface GoalMetrics {
   percentualMeta: number;       // % da meta total atingido
   percentualProporcional: number; // % em relação ao esperado até hoje
   diasNoMes: number;
-  diaAtual: number;             // Dia D-1 (ontem) para cálculo de esperado
+  diaAtual: number;             // Dia de referencia (Hoje/Ontem) para calculo de esperado
   // Week metrics
-  metaSemana: number;           // Meta da semana (soma das metas diárias ajustadas)
-  realizadoSemana: number;      // Faturamento realizado na semana até D-1
-  diasNaSemana: number;         // Dias na semana até D-1 (calendário)
-  esperadoSemanal: number;      // Meta esperada até D-1 (ajustada para AR COND)
+  metaSemana: number;           // Meta da semana (soma das metas diarias, com planner dinamico no mes atual)
+  realizadoSemana: number;      // Faturamento realizado na semana ate a referencia
+  diasNaSemana: number;         // Dias na semana ate a referencia (calendario)
+  esperadoSemanal: number;      // Meta esperada ate a referencia (planner dinamico no mes atual)
   // Day metrics
   metaDia: number;              // Meta do dia base (metaMensal / diasNoMes)
-  metaDiaAjustada: number;      // Meta do dia ajustada (regra AR COND aplicada)
-  realizadoDia: number;         // Faturamento realizado no dia (D-1)
+  metaDiaAjustada: number;      // Meta do dia (planner dinamico no mes atual; fallback para regra classica)
+  realizadoDia: number;         // Faturamento realizado no dia de referencia (Hoje/Ontem)
   // Year metrics
   metaAno: number;              // Meta do ano
-  realizadoAno: number;         // Faturamento realizado no ano até D-1
+  realizadoAno: number;         // Faturamento realizado no ano ate a referencia
   mesesNoAno: number;           // Meses no ano (12)
-  mesAtual: number;             // Mês de D-1 (1-12)
+  mesAtual: number;             // Mes de referencia (1-12)
   metasMensais: number[];       // Metas mensais (Jan-Dez) para o contexto filtrado
   // AR CONDICIONADO specific
   isArCondicionado: boolean;    // Se o contexto é 100% AR CONDICIONADO

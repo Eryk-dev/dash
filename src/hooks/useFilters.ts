@@ -1,25 +1,53 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import type { FaturamentoRecord, Filters, KPIs, GoalMetrics, RevenueLine } from '../types';
-import { startOfWeek, startOfMonth, startOfYear, getDaysInMonth, differenceInCalendarDays, addDays } from 'date-fns';
+import {
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  startOfYear,
+  getDaysInMonth,
+  differenceInCalendarDays,
+  addDays,
+} from 'date-fns';
 import type { CompanyYearlyGoal } from '../data/goals';
 import {
   buildCompanyMetaInfo,
+  buildAdaptiveDailyGoalPlanner,
   filterCompaniesByFilters,
-  getTotalAdjustedDailyGoal,
   getTotalBaseDailyGoal,
   getTotalMonthlyGoal,
   getTotalYearlyGoal,
-  sumAdjustedDailyGoalsForRange,
-  buildDailyGoalMap,
 } from '../utils/goalCalculator';
 
-export type DatePreset = 'yesterday' | 'wtd' | 'mtd' | 'all';
+export type DatePreset = 'today' | 'yesterday' | 'wtd' | 'mtd' | 'all';
+
+export interface CompanyDailyPerformanceItem {
+  empresa: string;
+  grupo: string;
+  segmento: string;
+  realizado: number;
+  meta: number;
+  gap: number;
+  percentualMeta: number;
+}
+
+const GAP_CATCHUP_STORAGE_KEY = 'faturamento-dashboard-gap-catchup-enabled';
+
+function getReferenceDateForPreset(preset: DatePreset): Date {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  if (preset === 'yesterday') {
+    date.setDate(date.getDate() - 1);
+  }
+  return date;
+}
 
 export interface DailyDataPoint {
   date: Date;
-  total: number;
+  total: number | null;
   goal?: number;
-  [key: string]: number | Date | undefined; // For dynamic company keys
+  [key: string]: number | Date | null | undefined; // For dynamic company keys
 }
 
 interface GoalHelpers {
@@ -39,6 +67,24 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
   });
 
   const [datePreset, setDatePreset] = useState<DatePreset>('mtd');
+  const [gapCatchUpEnabled, setGapCatchUpEnabled] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(GAP_CATCHUP_STORAGE_KEY);
+      if (raw === null) return true;
+      return raw === 'true';
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(GAP_CATCHUP_STORAGE_KEY, String(gapCatchUpEnabled));
+    } catch {
+      // ignore storage failures
+    }
+  }, [gapCatchUpEnabled]);
+
   const lineSets = useMemo(() => {
     return {
       empresas: new Set(lines.map((l) => l.empresa)),
@@ -67,7 +113,29 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
 
   // Extract unique values for dropdowns
   const options = useMemo(() => {
-    const empresas = [...new Set(lines.map((c) => c.empresa))].sort();
+    const isSingleDayPreset = datePreset === 'today' || datePreset === 'yesterday';
+    const empresasComResultadoNoDia = new Set<string>();
+
+    if (isSingleDayPreset) {
+      const referenceDate = getReferenceDateForPreset(datePreset);
+      const dayStart = new Date(referenceDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(referenceDate);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      data.forEach((record) => {
+        if (record.faturamento <= 0) return;
+        if (filters.grupos.length > 0 && !filters.grupos.includes(record.grupo)) return;
+        if (filters.segmentos.length > 0 && !filters.segmentos.includes(record.segmento)) return;
+        if (record.data < dayStart || record.data > dayEnd) return;
+        empresasComResultadoNoDia.add(record.empresa);
+      });
+    }
+
+    const empresas = (isSingleDayPreset
+      ? Array.from(empresasComResultadoNoDia)
+      : [...new Set(lines.map((c) => c.empresa))]
+    ).sort();
     const grupos = [...new Set(lines.map((c) => c.grupo))].sort();
     const segmentos = [...new Set(lines.map((c) => c.segmento))].sort();
 
@@ -76,7 +144,13 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
     const maxDate = dates.length > 0 ? new Date(Math.max(...dates)) : null;
 
     return { empresas, grupos, segmentos, minDate, maxDate };
-  }, [data, lines]);
+  }, [
+    data,
+    lines,
+    datePreset,
+    filters.grupos,
+    filters.segmentos,
+  ]);
 
   // Calculate effective date range based on preset or custom dates
   const effectiveDateRange = useMemo(() => {
@@ -84,6 +158,13 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
     today.setHours(23, 59, 59, 999);
 
     switch (datePreset) {
+      case 'today': {
+        const start = new Date(today);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(today);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
       case 'yesterday': {
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
@@ -95,11 +176,13 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
       }
       case 'wtd': {
         const start = startOfWeek(today, { weekStartsOn: 1 });
-        return { start, end: today };
+        const end = endOfWeek(today, { weekStartsOn: 1 });
+        return { start, end };
       }
       case 'mtd': {
         const start = startOfMonth(today);
-        return { start, end: today };
+        const end = endOfMonth(today);
+        return { start, end };
       }
       case 'all':
       default:
@@ -121,6 +204,26 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
       return true;
     });
   }, [data, filters, effectiveDateRange]);
+
+  // Data filtered only by entities (all dates), used by goal models and month/week/day realized
+  const entityFilteredData = useMemo(() => {
+    return data.filter((record) => {
+      if (filters.empresas.length > 0 && !filters.empresas.includes(record.empresa)) return false;
+      if (filters.grupos.length > 0 && !filters.grupos.includes(record.grupo)) return false;
+      if (filters.segmentos.length > 0 && !filters.segmentos.includes(record.segmento)) return false;
+      return true;
+    });
+  }, [data, filters.empresas, filters.grupos, filters.segmentos]);
+
+  const adaptiveGoalPlanner = useMemo(() => {
+    const referenceDate = getReferenceDateForPreset(datePreset);
+    return buildAdaptiveDailyGoalPlanner(
+      selectedCompaniesForGoals,
+      entityFilteredData,
+      referenceDate,
+      { catchUpEnabled: gapCatchUpEnabled }
+    );
+  }, [selectedCompaniesForGoals, entityFilteredData, datePreset, gapCatchUpEnabled]);
 
   // Data filtered only by date (for total calculations)
   const dateFilteredData = useMemo(() => {
@@ -146,70 +249,46 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
     };
   }, [filteredData, dateFilteredData]);
 
-  // Sempre usar o mês de D-1 como referência para metas
+  // Use o mês da referência ativa (Hoje/Ontem) para metas
   useEffect(() => {
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    setSelectedMonth(yesterday.getMonth() + 1);
-  }, [setSelectedMonth]);
+    const referenceDate = getReferenceDateForPreset(datePreset);
+    setSelectedMonth(referenceDate.getMonth() + 1);
+  }, [setSelectedMonth, datePreset]);
 
   // Calculate goal metrics (metas)
   const goalMetrics = useMemo((): GoalMetrics => {
-    const today = new Date();
-
-    // D-1 (yesterday) is the reference for "where we should be"
-    // because revenue can only be closed on D+1
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    yesterday.setHours(12, 0, 0, 0); // noon to avoid timezone issues
+    const referenceDate = getReferenceDateForPreset(datePreset);
+    const dayStart = new Date(referenceDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(referenceDate);
+    dayEnd.setHours(23, 59, 59, 999);
 
     const isAllPreset = datePreset === 'all';
     const hasCustomRange = isAllPreset && !!effectiveDateRange.start && !!effectiveDateRange.end;
-
-    // Determine the reference date based on filtered data
-    let referenceDate = today;
-    if (filteredData.length > 0) {
-      referenceDate = filteredData.reduce((latest, r) =>
-        r.data > latest ? r.data : latest, filteredData[0].data);
-    } else if (effectiveDateRange.end) {
-      referenceDate = effectiveDateRange.end;
-    }
-
-    const refMonth = yesterday.getMonth() + 1; // 1-12, use D-1 for month reference
-    const refYear = yesterday.getFullYear();
-    // diaAtual = D-1 for "expected" calculations (where we should be)
-    const diaAtual = yesterday.getDate();
-    const diasNoMes = getDaysInMonth(yesterday);
+    const refMonth = referenceDate.getMonth() + 1;
+    const refYear = referenceDate.getFullYear();
+    const diaAtual = referenceDate.getDate();
+    const diasNoMes = getDaysInMonth(referenceDate);
 
     const selectedCompanies = selectedCompaniesForGoals;
     const isArCondicionado = selectedCompanies.length > 0 && selectedCompanies.every(
       (c) => c.segmento === 'AR CONDICIONADO'
     );
 
-    // Apply entity filters to all data
-    const entityFilteredData = data.filter((record) => {
-      if (filters.empresas.length > 0 && !filters.empresas.includes(record.empresa)) return false;
-      if (filters.grupos.length > 0 && !filters.grupos.includes(record.grupo)) return false;
-      if (filters.segmentos.length > 0 && !filters.segmentos.includes(record.segmento)) return false;
-      return true;
-    });
-
     // Get realized amount from filtered data
     const realizado = filteredData.reduce((sum, r) => sum + r.faturamento, 0);
 
     let metaMensal = 0;
     let metaProporcional = 0;
-    const metaDia = getTotalBaseDailyGoal(selectedCompanies, yesterday);
-    const metaDiaAjustada = getTotalAdjustedDailyGoal(selectedCompanies, yesterday);
+    const metaDia = getTotalBaseDailyGoal(selectedCompanies, referenceDate);
+    const metaDiaAjustada = adaptiveGoalPlanner.getGoalForDate(referenceDate);
     const metaAno = getTotalYearlyGoal(selectedCompanies);
     const metasMensais = Array.from({ length: 12 }, (_, index) =>
       getTotalMonthlyGoal(selectedCompanies, index + 1)
     );
 
     if (hasCustomRange && effectiveDateRange.start && effectiveDateRange.end) {
-      metaMensal = sumAdjustedDailyGoalsForRange(
-        selectedCompanies,
+      metaMensal = adaptiveGoalPlanner.sumGoalsForRange(
         effectiveDateRange.start,
         effectiveDateRange.end
       );
@@ -219,7 +298,7 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
         new Set(filteredData.map((r) => r.data.toISOString().split('T')[0]))
       ).map((dateStr) => new Date(dateStr + 'T12:00:00'));
 
-      const goalMap = buildDailyGoalMap(selectedCompanies, uniqueDates);
+      const goalMap = adaptiveGoalPlanner.buildGoalMapForDates(uniqueDates);
       metaMensal = uniqueDates.reduce((sum, date) => {
         const key = date.toISOString().split('T')[0];
         return sum + (goalMap.get(key) || 0);
@@ -227,10 +306,9 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
       metaProporcional = metaMensal;
     } else {
       metaMensal = getTotalMonthlyGoal(selectedCompanies, refMonth);
-      metaProporcional = sumAdjustedDailyGoalsForRange(
-        selectedCompanies,
-        startOfMonth(yesterday),
-        yesterday
+      metaProporcional = adaptiveGoalPlanner.sumGoalsForRange(
+        startOfMonth(referenceDate),
+        referenceDate
       );
     }
 
@@ -240,47 +318,41 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
     const percentualProporcional = metaProporcional > 0 ? (realizado / metaProporcional) * 100 : 0;
 
     // Week metrics
-    const yesterdayEnd = new Date(yesterday);
-    yesterdayEnd.setHours(23, 59, 59, 999);
-
-    const weekStart = startOfWeek(yesterday, { weekStartsOn: 1 });
+    const weekStart = startOfWeek(referenceDate, { weekStartsOn: 1 });
     const weekEnd = addDays(weekStart, 6);
     const diasNaSemana = Math.max(
       Math.min(
-        Math.floor((yesterdayEnd.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24)) + 1,
+        Math.floor((dayEnd.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24)) + 1,
         7
       ),
       0
     );
 
-    const metaSemana = sumAdjustedDailyGoalsForRange(selectedCompanies, weekStart, weekEnd);
-    const esperadoSemanal = sumAdjustedDailyGoalsForRange(selectedCompanies, weekStart, yesterday);
+    const metaSemana = adaptiveGoalPlanner.sumGoalsForRange(weekStart, weekEnd);
+    const esperadoSemanal = adaptiveGoalPlanner.sumGoalsForRange(weekStart, referenceDate);
 
-    // Realizado semanal = até D-1 (ontem)
+    // Realizado semanal ate a referencia (Hoje/Ontem)
     const realizadoSemana = entityFilteredData
-      .filter((record) => record.data >= weekStart && record.data <= yesterdayEnd)
+      .filter((record) => record.data >= weekStart && record.data <= dayEnd)
       .reduce((sum, r) => sum + r.faturamento, 0);
-
-    const yesterdayStart = new Date(yesterday);
-    yesterdayStart.setHours(0, 0, 0, 0);
 
     const realizadoDia = entityFilteredData
-      .filter((record) => record.data >= yesterdayStart && record.data <= yesterdayEnd)
+      .filter((record) => record.data >= dayStart && record.data <= dayEnd)
       .reduce((sum, r) => sum + r.faturamento, 0);
 
-    // Month metrics - always full month until D-1, independent of date filter
-    const monthStart = startOfMonth(yesterday);
+    // Month metrics - always full month ate a referencia, independente do filtro de data
+    const monthStart = startOfMonth(referenceDate);
     const realizadoMes = entityFilteredData
-      .filter((record) => record.data >= monthStart && record.data <= yesterdayEnd)
+      .filter((record) => record.data >= monthStart && record.data <= dayEnd)
       .reduce((sum, r) => sum + r.faturamento, 0);
 
     // Year metrics
     const mesAtual = refMonth;
     const mesesNoAno = 12;
 
-    // Get all year data for the reference year until D-1
+    // Get all year data for the reference year until reference day
     const realizadoAno = entityFilteredData
-      .filter((record) => record.data.getFullYear() === refYear && record.data <= yesterdayEnd)
+      .filter((record) => record.data.getFullYear() === refYear && record.data <= dayEnd)
       .reduce((sum, r) => sum + r.faturamento, 0);
 
     const coverage = (() => {
@@ -351,33 +423,27 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
       isArCondicionado,
     };
   }, [
-    data,
     filteredData,
     datePreset,
     effectiveDateRange,
-    filters.empresas,
-    filters.grupos,
-    filters.segmentos,
     selectedCompaniesForGoals,
+    entityFilteredData,
+    adaptiveGoalPlanner,
   ]);
 
-  // Company goal breakdown for table - uses reference month from filtered data
+  // Company goal breakdown for table - uses current reference month (Hoje/Ontem)
   const companyGoalData = useMemo(() => {
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    yesterday.setHours(12, 0, 0, 0);
-
-    const refMonth = yesterday.getMonth() + 1;
-    const refYear = yesterday.getFullYear();
-    const monthStart = startOfMonth(yesterday);
-    const yesterdayEnd = new Date(yesterday);
-    yesterdayEnd.setHours(23, 59, 59, 999);
+    const referenceDate = getReferenceDateForPreset(datePreset);
+    const refMonth = referenceDate.getMonth() + 1;
+    const refYear = referenceDate.getFullYear();
+    const monthStart = startOfMonth(referenceDate);
+    const referenceEnd = new Date(referenceDate);
+    referenceEnd.setHours(23, 59, 59, 999);
 
     const allMonthData = data.filter((record) => {
       const recordMonth = record.data.getMonth() + 1;
       const recordYear = record.data.getFullYear();
-      return recordMonth === refMonth && recordYear === refYear && record.data <= yesterdayEnd;
+      return recordMonth === refMonth && recordYear === refYear && record.data <= referenceEnd;
     });
 
     const byEmpresa = new Map<string, number>();
@@ -385,10 +451,26 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
       byEmpresa.set(record.empresa, (byEmpresa.get(record.empresa) || 0) + record.faturamento);
     });
 
+    const historyByEmpresa = new Map<string, FaturamentoRecord[]>();
+    data.forEach((record) => {
+      const current = historyByEmpresa.get(record.empresa);
+      if (current) {
+        current.push(record);
+      } else {
+        historyByEmpresa.set(record.empresa, [record]);
+      }
+    });
+
     return companyMetaInfo.map((company) => {
       const realizado = byEmpresa.get(company.empresa) || 0;
       const metaMensal = company.metas[refMonth] || 0;
-      const metaProporcional = sumAdjustedDailyGoalsForRange([company], monthStart, yesterday);
+      const companyPlanner = buildAdaptiveDailyGoalPlanner(
+        [company],
+        historyByEmpresa.get(company.empresa) || [],
+        referenceDate,
+        { catchUpEnabled: gapCatchUpEnabled }
+      );
+      const metaProporcional = companyPlanner.sumGoalsForRange(monthStart, referenceDate);
       const percentualMeta = metaMensal > 0 ? (realizado / metaMensal) * 100 : 0;
       const gap = realizado - metaProporcional;
 
@@ -403,19 +485,34 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
         gap,
       };
     }).filter((item) => item.metaMensal > 0 || item.realizado > 0);
-  }, [data, companyMetaInfo]);
+  }, [data, companyMetaInfo, datePreset, gapCatchUpEnabled]);
 
   // Daily totals for chart - with breakdown by company and group
   const dailyData = useMemo(() => {
     const grouped = new Map<string, { total: number; byCompany: Map<string, number>; byGroup: Map<string, number> }>();
+    const referenceDate = getReferenceDateForPreset(datePreset);
+
+    const ensureDateBucket = (date: Date) => {
+      const key = date.toISOString().split('T')[0];
+      if (!grouped.has(key)) {
+        grouped.set(key, { total: 0, byCompany: new Map(), byGroup: new Map() });
+      }
+      return key;
+    };
+
+    if ((datePreset === 'mtd' || datePreset === 'wtd') && effectiveDateRange.start && effectiveDateRange.end) {
+      const rangeStart = new Date(effectiveDateRange.start);
+      const rangeEnd = new Date(effectiveDateRange.end);
+      let cursor = new Date(rangeStart);
+      cursor.setHours(12, 0, 0, 0);
+      while (cursor <= rangeEnd) {
+        ensureDateBucket(cursor);
+        cursor = addDays(cursor, 1);
+      }
+    }
 
     filteredData.forEach((record) => {
-      const dateKey = record.data.toISOString().split('T')[0];
-
-      if (!grouped.has(dateKey)) {
-        grouped.set(dateKey, { total: 0, byCompany: new Map(), byGroup: new Map() });
-      }
-
+      const dateKey = ensureDateBucket(record.data);
       const dayData = grouped.get(dateKey)!;
       dayData.total += record.faturamento;
 
@@ -428,14 +525,24 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
       dayData.byGroup.set(record.grupo, currentGroupTotal + record.faturamento);
     });
 
+    const referenceKey = referenceDate.toISOString().split('T')[0];
+    const inRange = (!effectiveDateRange.start || referenceDate >= effectiveDateRange.start) &&
+      (!effectiveDateRange.end || referenceDate <= effectiveDateRange.end);
+    if (datePreset !== 'all' && inRange && !grouped.has(referenceKey)) {
+      grouped.set(referenceKey, { total: 0, byCompany: new Map(), byGroup: new Map() });
+    }
+
     const dates = Array.from(grouped.keys()).map((date) => new Date(date + 'T12:00:00'));
-    const goalMap = buildDailyGoalMap(selectedCompaniesForGoals, dates);
+    const goalMap = adaptiveGoalPlanner.buildGoalMapForDates(dates);
 
     return Array.from(grouped.entries())
       .map(([date, { total, byCompany, byGroup }]) => {
+        const pointDate = new Date(date + 'T12:00:00');
+        const hasRecords = byCompany.size > 0 || byGroup.size > 0;
+        const isFuture = pointDate > referenceDate;
         const point: DailyDataPoint = {
-          date: new Date(date + 'T12:00:00'), // Use noon to avoid timezone issues
-          total,
+          date: pointDate, // Use noon to avoid timezone issues
+          total: !hasRecords && isFuture ? null : total,
         };
 
         const goalValue = goalMap.get(date) || 0;
@@ -456,7 +563,7 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
         return point;
       })
       .sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [filteredData, selectedCompaniesForGoals]);
+  }, [filteredData, adaptiveGoalPlanner, datePreset, effectiveDateRange]);
 
   // Comparison state
   const [comparisonEnabled, setComparisonEnabled] = useState(false);
@@ -527,14 +634,28 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
     if (!comparisonFilteredData) return null;
 
     const grouped = new Map<string, { total: number; byCompany: Map<string, number>; byGroup: Map<string, number> }>();
+    const ensureDateBucket = (date: Date) => {
+      const key = date.toISOString().split('T')[0];
+      if (!grouped.has(key)) {
+        grouped.set(key, { total: 0, byCompany: new Map(), byGroup: new Map() });
+      }
+      return key;
+    };
+
+    if ((datePreset === 'mtd' || datePreset === 'wtd') && comparisonDateRange) {
+      const monthStart = new Date(comparisonDateRange.start);
+      monthStart.setHours(12, 0, 0, 0);
+      const monthEnd = new Date(comparisonDateRange.end);
+      monthEnd.setHours(12, 0, 0, 0);
+      let cursor = new Date(monthStart);
+      while (cursor <= monthEnd) {
+        ensureDateBucket(cursor);
+        cursor = addDays(cursor, 1);
+      }
+    }
 
     comparisonFilteredData.forEach((record) => {
-      const dateKey = record.data.toISOString().split('T')[0];
-
-      if (!grouped.has(dateKey)) {
-        grouped.set(dateKey, { total: 0, byCompany: new Map(), byGroup: new Map() });
-      }
-
+      const dateKey = ensureDateBucket(record.data);
       const dayData = grouped.get(dateKey)!;
       dayData.total += record.faturamento;
 
@@ -549,9 +670,10 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
 
     return Array.from(grouped.entries())
       .map(([date, { total, byCompany, byGroup }]) => {
+        const hasRecords = byCompany.size > 0 || byGroup.size > 0;
         const point: DailyDataPoint = {
           date: new Date(date + 'T12:00:00'), // Use noon to avoid timezone issues
-          total,
+          total: hasRecords ? total : null,
         };
 
         // Add company-specific values
@@ -567,20 +689,97 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
         return point;
       })
       .sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [comparisonFilteredData]);
+  }, [comparisonFilteredData, datePreset, comparisonDateRange]);
 
   const comparisonLabel = comparisonDateRange?.label ?? null;
 
   const getGoalForDate = useCallback(
-    (date: Date) => getTotalAdjustedDailyGoal(selectedCompaniesForGoals, date),
-    [selectedCompaniesForGoals]
+    (date: Date) => adaptiveGoalPlanner.getGoalForDate(date),
+    [adaptiveGoalPlanner]
   );
 
   // Get list of companies in the chart data (for line chart)
+  const companiesWithDailyResult = useMemo(() => {
+    const referenceDate = getReferenceDateForPreset(datePreset);
+    const dayStart = new Date(referenceDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(referenceDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const totals = new Map<string, number>();
+    entityFilteredData
+      .filter((record) => record.data >= dayStart && record.data <= dayEnd)
+      .forEach((record) => {
+        totals.set(record.empresa, (totals.get(record.empresa) || 0) + record.faturamento);
+      });
+
+    return Array.from(totals.entries())
+      .filter(([, total]) => total > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([empresa]) => empresa);
+  }, [entityFilteredData, datePreset]);
+
   const chartCompanies = useMemo(() => {
-    if (filters.empresas.length <= 1) return [];
-    return filters.empresas;
-  }, [filters.empresas]);
+    if (filters.empresas.length > 1) return filters.empresas;
+    if (datePreset === 'today' && filters.empresas.length === 0) {
+      return companiesWithDailyResult;
+    }
+    return [];
+  }, [filters.empresas, datePreset, companiesWithDailyResult]);
+
+  const companyDailyPerformance = useMemo((): CompanyDailyPerformanceItem[] => {
+    const referenceDate = getReferenceDateForPreset(datePreset);
+    const dayStart = new Date(referenceDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(referenceDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const realizedByCompany = new Map<string, number>();
+    entityFilteredData
+      .filter((record) => record.data >= dayStart && record.data <= dayEnd)
+      .forEach((record) => {
+        realizedByCompany.set(
+          record.empresa,
+          (realizedByCompany.get(record.empresa) || 0) + record.faturamento
+        );
+      });
+
+    const historyByEmpresa = new Map<string, FaturamentoRecord[]>();
+    entityFilteredData.forEach((record) => {
+      const current = historyByEmpresa.get(record.empresa);
+      if (current) {
+        current.push(record);
+      } else {
+        historyByEmpresa.set(record.empresa, [record]);
+      }
+    });
+
+    return selectedCompaniesForGoals
+      .map((company) => {
+        const companyPlanner = buildAdaptiveDailyGoalPlanner(
+          [company],
+          historyByEmpresa.get(company.empresa) || [],
+          referenceDate,
+          { catchUpEnabled: gapCatchUpEnabled }
+        );
+        const meta = companyPlanner.getGoalForDate(referenceDate);
+        const realizado = realizedByCompany.get(company.empresa) || 0;
+        const gap = realizado - meta;
+        const percentualMeta = meta > 0 ? (realizado / meta) * 100 : 0;
+
+        return {
+          empresa: company.empresa,
+          grupo: company.grupo,
+          segmento: company.segmento,
+          realizado,
+          meta,
+          gap,
+          percentualMeta,
+        };
+      })
+      .filter((item) => item.realizado > 0)
+      .sort((a, b) => b.realizado - a.realizado);
+  }, [selectedCompaniesForGoals, entityFilteredData, datePreset, gapCatchUpEnabled]);
 
   // Get all unique companies from filtered data (for stacked bar chart)
   const allCompaniesInData = useMemo(() => {
@@ -725,6 +924,10 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
     setCustomComparisonEnd(null);
   }, []);
 
+  const toggleGapCatchUp = useCallback(() => {
+    setGapCatchUpEnabled((prev) => !prev);
+  }, []);
+
   const hasActiveFilters =
     filters.empresas.length > 0 ||
     filters.grupos.length > 0 ||
@@ -748,8 +951,10 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
     comparisonDateRange,
     customComparisonStart,
     customComparisonEnd,
+    gapCatchUpEnabled,
     getGoalForDate,
     chartCompanies,
+    companyDailyPerformance,
     allCompaniesInData,
     allGroupsInData,
     groupBreakdown,
@@ -767,5 +972,6 @@ export function useFilters(data: FaturamentoRecord[], goalHelpers: GoalHelpers) 
     toggleComparison,
     setCustomComparisonRange,
     clearCustomComparison,
+    toggleGapCatchUp,
   };
 }

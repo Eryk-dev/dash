@@ -15,7 +15,7 @@ import styles from './PaceChart.module.css';
 
 interface DailyDataPoint {
   date: Date;
-  total: number;
+  total: number | null;
 }
 
 interface PaceChartProps {
@@ -104,10 +104,14 @@ export function PaceChart({
   monthlyGoals,
 }: PaceChartProps) {
   const isMobile = useIsMobile();
+  const realizedDailyData = useMemo(
+    () => dailyData.filter((d): d is { date: Date; total: number } => typeof d.total === 'number'),
+    [dailyData]
+  );
   const referenceDate = useMemo(() => {
-    if (dailyData.length > 0) {
-      const latestDate = dailyData.reduce((latest, d) =>
-        d.date > latest ? d.date : latest, dailyData[0].date);
+    if (realizedDailyData.length > 0) {
+      const latestDate = realizedDailyData.reduce((latest, d) =>
+        d.date > latest ? d.date : latest, realizedDailyData[0].date);
       return new Date(latestDate.getFullYear(), latestDate.getMonth(), latestDate.getDate(), 12, 0, 0);
     }
     if (anoReferencia && mesReferencia) {
@@ -115,7 +119,7 @@ export function PaceChart({
     }
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
-  }, [dailyData, anoReferencia, mesReferencia, diaAtual]);
+  }, [realizedDailyData, anoReferencia, mesReferencia, diaAtual]);
 
   const refMonth = referenceDate.getMonth() + 1;
   const refYear = referenceDate.getFullYear();
@@ -123,7 +127,7 @@ export function PaceChart({
   // Calculate average daily revenue from filtered data only
   // Note: dailyData is already filtered by empresa/grupo when filters are applied
   const avgDaily = useMemo(() => {
-    const values = dailyData.filter(d => d.total > 0).map(d => d.total);
+    const values = realizedDailyData.filter((d) => d.total > 0).map((d) => d.total);
 
     // If we have data, use it
     if (values.length > 0) {
@@ -132,17 +136,19 @@ export function PaceChart({
 
     // Fallback to meta-based estimate
     return metaMensal / diasNoMes;
-  }, [dailyData, metaMensal, diasNoMes]);
+  }, [realizedDailyData, metaMensal, diasNoMes]);
 
   const forecastModel = useMemo(() => {
     const source = allHistoricalData && allHistoricalData.length > 0
-      ? allHistoricalData
-      : dailyData;
+      ? allHistoricalData.filter((d): d is { date: Date; total: number } => typeof d.total === 'number')
+      : realizedDailyData;
     return buildForecastModel(source, seasonalityFactors, referenceDate, avgDaily);
-  }, [allHistoricalData, dailyData, seasonalityFactors, referenceDate, avgDaily]);
+  }, [allHistoricalData, realizedDailyData, seasonalityFactors, referenceDate, avgDaily]);
 
   const chartState = useMemo(() => {
-    const dataSource = allHistoricalData || dailyData;
+    const dataSource = allHistoricalData && allHistoricalData.length > 0
+      ? allHistoricalData.filter((d): d is { date: Date; total: number } => typeof d.total === 'number')
+      : realizedDailyData;
     const toKey = (date: Date) => date.toISOString().split('T')[0];
     const metaDiaria = metaMensal / diasNoMes;
     const goalForDate = (date: Date) => {
@@ -153,23 +159,23 @@ export function PaceChart({
     };
 
     const dailyTotals = new Map<string, number>();
-    dailyData.forEach((d) => {
+    realizedDailyData.forEach((d) => {
       const key = toKey(d.date);
       dailyTotals.set(key, (dailyTotals.get(key) || 0) + d.total);
     });
 
-    if (datePreset === 'yesterday') {
+    if (datePreset === 'today' || datePreset === 'yesterday') {
       const targetDate = referenceDate;
-      const yesterdayTotal = dailyData
+      const dayTotal = realizedDailyData
         .filter(d => d.date.toDateString() === targetDate.toDateString())
         .reduce((sum, d) => sum + d.total, 0);
 
       return {
-        mode: 'yesterday' as const,
+        mode: 'single-day' as const,
         meta: goalForDate(targetDate),
-        realizado: yesterdayTotal,
-        projecao: yesterdayTotal,
-        title: 'Ontem',
+        realizado: dayTotal,
+        projecao: dayTotal,
+        title: datePreset === 'today' ? 'Hoje' : 'Ontem',
       };
     }
 
@@ -409,7 +415,7 @@ export function PaceChart({
       },
     };
   }, [
-    dailyData,
+    realizedDailyData,
     allHistoricalData,
     datePreset,
     metaMensal,
@@ -424,14 +430,14 @@ export function PaceChart({
     getGoalForDate,
   ]);
 
-  const summary = chartState.mode === 'yesterday'
+  const summary = chartState.mode === 'single-day'
     ? { meta: chartState.meta, realizado: chartState.realizado, projecao: chartState.projecao, title: chartState.title }
     : { meta: chartState.cumulative.meta, realizado: chartState.cumulative.realizado, projecao: chartState.cumulative.projecao, title: chartState.cumulative.title };
 
   const percentMeta = summary.meta > 0 ? Math.round((summary.projecao / summary.meta) * 100) : 0;
   const statusClass = percentMeta >= 100 ? styles.positive : percentMeta >= 80 ? styles.warning : styles.negative;
 
-  if (chartState.mode === 'yesterday') {
+  if (chartState.mode === 'single-day') {
     const metaDia = chartState.meta;
     const percent = metaDia > 0 ? Math.round((chartState.realizado / metaDia) * 100) : 0;
     const dailyGap = chartState.realizado - metaDia;

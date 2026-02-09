@@ -16,9 +16,9 @@ import { RevenueChart } from './components/RevenueChart';
 import { GroupStackedBars } from './components/GroupStackedBars';
 import { ComparisonToggle } from './components/ComparisonToggle';
 import { DataEntry } from './components/DataEntry';
-import { BreakdownBars } from './components/BreakdownBars';
 import { SharePieChart } from './components/SharePieChart';
 import { RevenueLinesManager } from './components/RevenueLinesManager';
+import { TodayCompanyPerformance } from './components/TodayCompanyPerformance';
 import { useIsMobile } from './hooks/useIsMobile';
 import { RotateCcw, Settings2 } from 'lucide-react';
 import logo from './assets/logo.svg';
@@ -55,11 +55,12 @@ function App() {
     comparisonEnabled,
     customComparisonStart,
     customComparisonEnd,
+    gapCatchUpEnabled,
     getGoalForDate,
     chartCompanies,
+    companyDailyPerformance,
     allGroupsInData,
     groupBreakdown,
-    segmentBreakdown,
     empresaBreakdown,
     segmentPieData,
     datePreset,
@@ -71,12 +72,15 @@ function App() {
     toggleComparison,
     setCustomComparisonRange,
     clearCustomComparison,
+    toggleGapCatchUp,
   } = useFilters(data, { yearlyGoals, setSelectedMonth, lines });
 
   const hasEntityFilter =
     filters.empresas.length > 0 ||
     filters.grupos.length > 0 ||
     filters.segmentos.length > 0;
+  const isDailyPreset = datePreset === 'today' || datePreset === 'yesterday';
+  const dailyLabel = datePreset === 'today' ? 'Hoje' : 'Ontem';
 
   // Aggregate all data by date for historical projections
   const allHistoricalDailyData = useMemo(() => {
@@ -140,6 +144,82 @@ function App() {
         return { title: 'Por Segmento', data: segmentPieData };
     }
   }, [pieMode, groupPieData, empresaPieData, segmentPieData]);
+
+  const companyRankingData = useMemo(() => {
+    if (isDailyPreset) {
+      return [...companyDailyPerformance].sort((a, b) => b.realizado - a.realizado);
+    }
+
+    return companyGoalData
+      .map((item) => {
+        const meta = item.metaProporcional > 0 ? item.metaProporcional : item.metaMensal;
+        const gap = item.realizado - meta;
+        const percentualMeta = meta > 0 ? (item.realizado / meta) * 100 : 0;
+        return {
+          empresa: item.empresa,
+          grupo: item.grupo,
+          segmento: item.segmento,
+          realizado: item.realizado,
+          meta,
+          gap,
+          percentualMeta,
+        };
+      })
+      .filter((item) => item.realizado > 0 || item.meta > 0)
+      .sort((a, b) => b.realizado - a.realizado);
+  }, [isDailyPreset, companyDailyPerformance, companyGoalData]);
+
+  const groupRankingData = useMemo(() => {
+    const grouped = new Map<string, { realizado: number; meta: number }>();
+    companyRankingData.forEach((item) => {
+      const current = grouped.get(item.grupo) || { realizado: 0, meta: 0 };
+      current.realizado += item.realizado;
+      current.meta += item.meta;
+      grouped.set(item.grupo, current);
+    });
+
+    return Array.from(grouped.entries())
+      .map(([grupo, totals]) => {
+        const percentualMeta = totals.meta > 0 ? (totals.realizado / totals.meta) * 100 : 0;
+        return {
+          empresa: grupo,
+          grupo,
+          segmento: '',
+          realizado: totals.realizado,
+          meta: totals.meta,
+          gap: totals.realizado - totals.meta,
+          percentualMeta,
+        };
+      })
+      .filter((item) => item.realizado > 0 || item.meta > 0)
+      .sort((a, b) => b.realizado - a.realizado);
+  }, [companyRankingData]);
+
+  const segmentRankingData = useMemo(() => {
+    const grouped = new Map<string, { realizado: number; meta: number }>();
+    companyRankingData.forEach((item) => {
+      const current = grouped.get(item.segmento) || { realizado: 0, meta: 0 };
+      current.realizado += item.realizado;
+      current.meta += item.meta;
+      grouped.set(item.segmento, current);
+    });
+
+    return Array.from(grouped.entries())
+      .map(([segmento, totals]) => {
+        const percentualMeta = totals.meta > 0 ? (totals.realizado / totals.meta) * 100 : 0;
+        return {
+          empresa: segmento,
+          grupo: '',
+          segmento,
+          realizado: totals.realizado,
+          meta: totals.meta,
+          gap: totals.realizado - totals.meta,
+          percentualMeta,
+        };
+      })
+      .filter((item) => item.realizado > 0 || item.meta > 0)
+      .sort((a, b) => b.realizado - a.realizado);
+  }, [companyRankingData]);
 
   const handleAddLine = useCallback((line: { empresa: string; grupo: string; segmento: string }) => {
     addLine(line);
@@ -274,6 +354,14 @@ function App() {
             />
             <div className={styles.filtersDivider} />
             <DatePresets value={datePreset} onChange={setDatePreset} />
+            <button
+              type="button"
+              className={`${styles.catchUpToggle} ${gapCatchUpEnabled ? styles.catchUpOn : styles.catchUpOff}`}
+              onClick={toggleGapCatchUp}
+              title="Recalcular metas futuras para suprir (ou não) o gap acumulado"
+            >
+              Gap {gapCatchUpEnabled ? 'dinâmico' : 'fixo'}
+            </button>
             <DatePicker
               label="De"
               value={filters.dataInicio}
@@ -345,15 +433,41 @@ function App() {
             />
           </section>
 
-          <section className={styles.chartRow}>
-            <div className={styles.mainChart}>
-              <RevenueChart
-                data={dailyData}
-                companies={chartCompanies}
-                comparisonData={comparisonDailyData}
-                comparisonLabel={comparisonLabel}
-              />
-            </div>
+          <section className={`${styles.chartRow} ${isDailyPreset ? styles.chartRowToday : ''}`}>
+            {isDailyPreset ? (
+              <div className={styles.dailyRankingsGrid}>
+                <TodayCompanyPerformance
+                  data={companyRankingData}
+                  title={`Por Linha (${dailyLabel})`}
+                  limit={8}
+                  countLabel="linhas"
+                  emptyMessage={`Sem dados para ${dailyLabel.toLowerCase()}.`}
+                />
+                <TodayCompanyPerformance
+                  data={groupRankingData}
+                  title={`Por Grupo (${dailyLabel})`}
+                  limit={8}
+                  countLabel="grupos"
+                  emptyMessage={`Sem dados para ${dailyLabel.toLowerCase()}.`}
+                />
+                <TodayCompanyPerformance
+                  data={segmentRankingData}
+                  title={`Por Segmento (${dailyLabel})`}
+                  limit={8}
+                  countLabel="segmentos"
+                  emptyMessage={`Sem dados para ${dailyLabel.toLowerCase()}.`}
+                />
+              </div>
+            ) : (
+              <div className={styles.mainChart}>
+                <RevenueChart
+                  data={dailyData}
+                  companies={chartCompanies}
+                  comparisonData={comparisonDailyData}
+                  comparisonLabel={comparisonLabel}
+                />
+              </div>
+            )}
             <div className={styles.sideChart}>
               <div className={styles.pieSwitcher}>
                 <div className={styles.pieTabs}>
@@ -388,37 +502,49 @@ function App() {
             </div>
           </section>
 
-          <section className={styles.fullWidthChart}>
-            <GroupStackedBars
-              data={dailyData}
-              groups={allGroupsInData}
-              title="Contribuição por Grupo"
-              comparisonData={comparisonDailyData}
-              comparisonLabel={comparisonLabel}
-            />
-          </section>
+          {!isDailyPreset && (
+            <section className={styles.fullWidthChart}>
+              <GroupStackedBars
+                data={dailyData}
+                groups={allGroupsInData}
+                title="Contribuição por Grupo"
+                comparisonData={comparisonDailyData}
+                comparisonLabel={comparisonLabel}
+              />
+            </section>
+          )}
 
-          <section className={styles.grid}>
-            <div className={styles.gridItem}>
-              <BreakdownBars
-                title="Por Linha"
-                data={empresaBreakdown.map((e) => ({ label: e.empresa, value: e.total }))}
-                limit={8}
-              />
-            </div>
-            <div className={styles.gridItem}>
-              <BreakdownBars
-                title="Por Grupo"
-                data={groupBreakdown.map((g) => ({ label: g.grupo, value: g.total }))}
-              />
-            </div>
-            <div className={styles.gridItem}>
-              <BreakdownBars
-                title="Por Segmento"
-                data={segmentBreakdown.map((s) => ({ label: s.segmento, value: s.total }))}
-              />
-            </div>
-          </section>
+          {!isDailyPreset && (
+            <section className={styles.grid}>
+              <div className={styles.gridItem}>
+                <TodayCompanyPerformance
+                  data={companyRankingData}
+                  title="Por Linha"
+                  limit={8}
+                  countLabel="linhas"
+                  emptyMessage="Sem dados no período."
+                />
+              </div>
+              <div className={styles.gridItem}>
+                <TodayCompanyPerformance
+                  data={groupRankingData}
+                  title="Por Grupo"
+                  limit={8}
+                  countLabel="grupos"
+                  emptyMessage="Sem dados no período."
+                />
+              </div>
+              <div className={styles.gridItem}>
+                <TodayCompanyPerformance
+                  data={segmentRankingData}
+                  title="Por Segmento"
+                  limit={8}
+                  countLabel="segmentos"
+                  emptyMessage="Sem dados no período."
+                />
+              </div>
+            </section>
+          )}
         </>
       )}
 
@@ -454,6 +580,14 @@ function App() {
             />
             <div className={styles.filtersDivider} />
             <DatePresets value={datePreset} onChange={setDatePreset} />
+            <button
+              type="button"
+              className={`${styles.catchUpToggle} ${gapCatchUpEnabled ? styles.catchUpOn : styles.catchUpOff}`}
+              onClick={toggleGapCatchUp}
+              title="Recalcular metas futuras para suprir (ou não) o gap acumulado"
+            >
+              Gap {gapCatchUpEnabled ? 'dinâmico' : 'fixo'}
+            </button>
             <button
               type="button"
               className={styles.clearButton}

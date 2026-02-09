@@ -52,6 +52,27 @@ function formatBRL(value: number): string {
 
 export function RevenueChart({ data, companies = [], title = 'Faturamento Diário', comparisonData, comparisonLabel }: RevenueChartProps) {
   const isMobile = useIsMobile();
+  const latestDailyGoalPoint = [...data].reverse().find(
+    (point) => typeof point.total === 'number' && typeof point.goal === 'number'
+  );
+
+  const dailyGoalIndicators = latestDailyGoalPoint
+    ? (() => {
+        const realizado = latestDailyGoalPoint.total as number;
+        const meta = latestDailyGoalPoint.goal as number;
+        const gap = realizado - meta;
+        const falta = Math.max(meta - realizado, 0);
+        const percentual = meta > 0 ? (realizado / meta) * 100 : 0;
+        return {
+          dateLabel: formatDate(latestDailyGoalPoint.date),
+          realizado,
+          meta,
+          gap,
+          falta,
+          percentual,
+        };
+      })()
+    : null;
 
   const chartData = data.map((d, index) => {
     const point: Record<string, string | number | null> = {
@@ -65,7 +86,7 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
 
     // Add company values
     companies.forEach((company) => {
-      point[company] = (d[company] as number) || 0;
+      point[company] = typeof d[company] === 'number' ? (d[company] as number) : null;
     });
 
     return point;
@@ -76,7 +97,10 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
   const showMultipleLines = companies.length > 1;
 
   // Calculate Y-axis domain
-  const maxDataValue = data.length > 0 ? Math.max(...data.map((d) => d.total)) : 0;
+  const realizedValues = data
+    .map((d) => d.total)
+    .filter((value): value is number => typeof value === 'number');
+  const maxDataValue = realizedValues.length > 0 ? Math.max(...realizedValues) : 0;
 
   // Y-axis always starts at zero
   const yAxisMin = 0;
@@ -120,6 +144,38 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
     <div className={styles.container}>
       <div className={styles.header}>
         <span className={styles.title}>{title}</span>
+        {dailyGoalIndicators && (
+          <div className={styles.indicators}>
+            <div className={styles.indicatorItem}>
+              <span className={styles.indicatorLabel}>
+                Meta dia {dailyGoalIndicators.dateLabel}
+              </span>
+              <span className={styles.indicatorValue}>
+                {formatBRL(dailyGoalIndicators.meta)}
+              </span>
+            </div>
+            <div className={styles.indicatorItem}>
+              <span className={styles.indicatorLabel}>Realizado</span>
+              <span className={styles.indicatorValue}>
+                {formatBRL(dailyGoalIndicators.realizado)}
+              </span>
+            </div>
+            <div className={styles.indicatorItem}>
+              <span className={styles.indicatorLabel}>Quanto falta</span>
+              <span className={`${styles.indicatorValue} ${dailyGoalIndicators.falta > 0 ? styles.indicatorNegative : styles.indicatorPositive}`}>
+                {dailyGoalIndicators.falta > 0
+                  ? formatBRL(dailyGoalIndicators.falta)
+                  : `Meta batida (+${formatBRL(dailyGoalIndicators.gap)})`}
+              </span>
+            </div>
+            <div className={styles.indicatorItem}>
+              <span className={styles.indicatorLabel}>Atingimento</span>
+              <span className={`${styles.indicatorValue} ${dailyGoalIndicators.percentual >= 100 ? styles.indicatorPositive : styles.indicatorNegative}`}>
+                {Math.round(dailyGoalIndicators.percentual)}%
+              </span>
+            </div>
+          </div>
+        )}
       </div>
       <div className={styles.chart}>
         <ResponsiveContainer width="100%" height={chartHeight}>
@@ -150,12 +206,18 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
                 labelFormatter={formatTooltipLabel}
                 content={({ active, payload, label }) => {
                   if (active && payload && payload.length) {
-                    const currentTotal = payload.find((p) => p.dataKey === 'total')?.value as number | undefined;
-                    const compTotal = payload.find((p) => p.dataKey === 'comparisonTotal')?.value as number | undefined;
+                    const currentTotalRaw = payload.find((p) => p.dataKey === 'total')?.value;
+                    const currentTotal = typeof currentTotalRaw === 'number' ? currentTotalRaw : null;
+                    const compTotalRaw = payload.find((p) => p.dataKey === 'comparisonTotal')?.value;
+                    const compTotal = typeof compTotalRaw === 'number' ? compTotalRaw : null;
                     const goalEntry = payload.find((p) => p.dataKey === 'goal');
-                    const goalValue = goalEntry ? Number(goalEntry.value) : null;
-                    const delta = currentTotal && compTotal ? ((currentTotal - compTotal) / compTotal) * 100 : null;
-                    const gap = currentTotal && goalValue !== null ? currentTotal - goalValue : null;
+                    const goalValue = goalEntry && typeof goalEntry.value === 'number'
+                      ? Number(goalEntry.value)
+                      : null;
+                    const delta = currentTotal !== null && compTotal !== null && compTotal !== 0
+                      ? ((currentTotal - compTotal) / compTotal) * 100
+                      : null;
+                    const gap = currentTotal !== null && goalValue !== null ? currentTotal - goalValue : null;
 
                     const displayLabel = formatTooltipLabel(label);
                     return (
@@ -163,7 +225,11 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
                         <span className={styles.tooltipDate}>{displayLabel}</span>
                         <div className={styles.tooltipItems}>
                           {payload
-                            .filter((entry) => entry.dataKey !== 'comparisonTotal' && entry.dataKey !== 'goal')
+                            .filter((entry) =>
+                              entry.dataKey !== 'comparisonTotal' &&
+                              entry.dataKey !== 'goal' &&
+                              typeof entry.value === 'number'
+                            )
                             .map((entry, index) => (
                             <div key={index} className={styles.tooltipItem}>
                               <span
@@ -173,8 +239,8 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
                               <span className={styles.tooltipLabel}>
                                 {entry.name === 'total' ? 'Total' : entry.name}
                               </span>
-                              <span className={styles.tooltipValue}>
-                                {formatBRL(entry.value as number)}
+                                  <span className={styles.tooltipValue}>
+                                {formatBRL(Number(entry.value))}
                               </span>
                             </div>
                           ))}
@@ -331,7 +397,7 @@ export function RevenueChart({ data, companies = [], title = 'Faturamento Diári
                   dataKey="total"
                   position="top"
                   offset={8}
-                  formatter={(value) => value != null ? formatCompact(Number(value)) : ''}
+                  formatter={(value) => typeof value === 'number' ? formatCompact(value) : ''}
                   style={{
                     fontSize: 9,
                     fill: '#9a9a9a',
